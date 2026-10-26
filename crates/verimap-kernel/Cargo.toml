@@ -1,0 +1,17 @@
+[package]
+name = "verimap-kernel"
+description = "Dependency-free guards extracted to Lean with Charon and Aeneas"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# No dependencies: everything here is translated to Lean. Tests live in
+# tests/ so their dependencies never enter the extracted model.
+[dependencies]
+
+[dev-dependencies]
+proptest = "1"
+
+[lints]
+workspace = true

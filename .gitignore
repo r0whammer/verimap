@@ -1,0 +1,11 @@
+/target/
+/.direnv/
+*.llbc
+/proofs/.lake/
+/proofs/build/
+node_modules/
+/web/dist/
+/web/public/cesium/
+/web/src/wasm/
+/web/test-results/
+/web/playwright-report/

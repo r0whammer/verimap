@@ -1,0 +1,5 @@
+* text=auto eol=lf
+*.lean linguist-language=Lean
+/proofs/VeriMap/Code/** linguist-generated=true
+/schemas/** linguist-generated=true
+/web/src/generated/** linguist-generated=true
