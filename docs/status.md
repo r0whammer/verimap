@@ -1,9 +1,10 @@
 # Implementation status
 
 What exists and has been checked. CLAUDE.md is the specification; this file
-is the only place that claims progress. Updated 2026-10-25.
+is the only place that claims progress. Remaining work is tracked as GitHub
+issues in the VeriMap project, under milestones M2–M5. Updated 2026-10-25.
 
-## M0 — Foundation (done locally; CI not yet run)
+## M0 — Foundation (done; CI passing)
 
 | Item | Status | Evidence |
 | --- | --- | --- |
@@ -15,7 +16,7 @@ is the only place that claims progress. Updated 2026-10-25.
 | Versioned worker protocol, bounded parsing, generated schema + TS types | done, tested | `crates/verimap-protocol`, docs/protocol.md, `just check-generated` |
 | WASM worker round trip with protocol negotiation | done, tested | `crates/verimap-wasm`, `web/src/worker/`; Rust session tests, Vitest bridge tests, e2e handshake |
 | Synthetic Cesium scene (local ground, bounds box, anchor), 2D/3D switch | done, tested | `web/src/map/`; e2e switch test |
-| CI workflow | written, **not yet run** | `.github/workflows/verify.yml` (passes `actionlint`); runs the same recipes as `just verify` |
+| CI workflow | done, passing | `.github/workflows/verify.yml` runs the same recipes as `just verify`; GitHub Actions passed on `fc7a3a1` (run 40260738548) and `dcf979f` (run 40265412370) |
 
 ### What `just verify` checked
 
@@ -50,7 +51,7 @@ console errors or warnings.
 - The Cesium credit area shows Cesium's bundled logo image. It is a local
   asset; no ion request is made.
 
-## M1 — Vertical slice (done locally; CI not yet run)
+## M1 — Vertical slice (done; CI passing)
 
 One simulated vehicle goes through the whole path: synthetic observation →
 normalization and tracking → command → journal → Rust scene state → Cesium.
