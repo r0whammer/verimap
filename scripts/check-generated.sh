@@ -29,4 +29,9 @@ compare() { # compare <committed dir> <fresh dir> <how to regenerate>
 scripts/translate.sh "$tmp/proofs"
 compare proofs/VeriMap/Code "$tmp/proofs/VeriMap/Code" "just translate"
 
+cargo run -q -p verimap-protocol --bin verimap-schemas -- "$tmp/schemas"
+compare schemas "$tmp/schemas" "just gen"
+(cd web && node scripts/gen-types.mjs "$tmp/schemas" "$tmp/generated")
+compare web/src/generated "$tmp/generated" "just gen"
+
 exit "$status"

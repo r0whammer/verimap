@@ -59,6 +59,7 @@
               pkgs.elan
               pkgs.git
               pkgs.just
+              pkgs.watchexec
               pkgs.jq
               pkgs.nixfmt
               pkgs.pkg-config
@@ -71,9 +72,10 @@
             PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsers;
             PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
             PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
+            # On stderr, so `nix develop --command ...` output stays clean.
             shellHook = ''
-              echo "VeriMap dev shell: Rust $(rustc --version | cut -d' ' -f2-) / Charon / Aeneas / Node $(node --version) / pnpm $(pnpm --version)"
-              echo "Aeneas rev: $AENEAS_REV (Lean version pinned in proofs/lean-toolchain)"
+              echo "VeriMap dev shell: Rust $(rustc --version | cut -d' ' -f2-) / Charon / Aeneas / Node $(node --version) / pnpm $(pnpm --version)" >&2
+              echo "Aeneas rev: $AENEAS_REV (Lean version pinned in proofs/lean-toolchain)" >&2
             '';
           };
         }

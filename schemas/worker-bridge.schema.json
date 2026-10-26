@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WorkerBridge",
+  "description": "Schema root naming every bridge message type, so generated TypeScript\ndeclares each exactly once. Never sent on the wire.",
+  "type": "object",
+  "properties": {
+    "event": {
+      "description": "Core to UI.",
+      "$ref": "#/$defs/CoreEvent"
+    },
+    "request": {
+      "description": "UI to core.",
+      "$ref": "#/$defs/UiRequest"
+    }
+  },
+  "required": [
+    "request",
+    "event"
+  ],
+  "x-verimap-protocol-version": {
+    "major": 0,
+    "minor": 1
+  },
+  "$defs": {
+    "AxisBoundsDto": {
+      "description": "A closed interval of scene coordinates in integer millimetres.\n\nValues are within ±10⁸, so they are exact as JSON numbers in JavaScript.",
+      "type": "object",
+      "properties": {
+        "max_mm": {
+          "description": "Upper end, inclusive.",
+          "type": "integer",
+          "format": "int64",
+          "maximum": 100000000,
+          "minimum": -100000000
+        },
+        "min_mm": {
+          "description": "Lower end, inclusive.",
+          "type": "integer",
+          "format": "int64",
+          "maximum": 100000000,
+          "minimum": -100000000
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "min_mm",
+        "max_mm"
+      ]
+    },
+    "CoreEvent": {
+      "description": "The core's answer to one request.",
+      "oneOf": [
+        {
+          "description": "Handshake accepted.",
+          "type": "object",
+          "properties": {
+            "core_build": {
+              "description": "Core (WASM) build identifier, for diagnostics only.",
+              "type": "string"
+            },
+            "protocol": {
+              "description": "Protocol the core speaks.",
+              "$ref": "#/$defs/ProtocolVersion"
+            },
+            "site": {
+              "description": "The session's site frame.",
+              "$ref": "#/$defs/SiteDto"
+            },
+            "type": {
+              "type": "string",
+              "const": "ready"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "protocol",
+            "core_build",
+            "site"
+          ]
+        },
+        {
+          "description": "Handshake refused: this UI and core cannot work together. The UI must\nnot send further requests; reloading fetches a matching bundle.",
+          "type": "object",
+          "properties": {
+            "core_protocol": {
+              "description": "Protocol the core speaks.",
+              "$ref": "#/$defs/ProtocolVersion"
+            },
+            "type": {
+              "type": "string",
+              "const": "incompatible"
+            },
+            "ui_protocol": {
+              "description": "Protocol the UI offered.",
+              "$ref": "#/$defs/ProtocolVersion"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "core_protocol",
+            "ui_protocol"
+          ]
+        },
+        {
+          "description": "The request was rejected; no state changed.",
+          "type": "object",
+          "properties": {
+            "code": {
+              "description": "Machine-readable reason.",
+              "$ref": "#/$defs/ErrorCode"
+            },
+            "message": {
+              "description": "Human-readable detail. Render as text only.",
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "error"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "code",
+            "message"
+          ]
+        }
+      ]
+    },
+    "ErrorCode": {
+      "description": "Why a request was rejected.",
+      "oneOf": [
+        {
+          "description": "Larger than [`MAX_REQUEST_BYTES`].",
+          "type": "string",
+          "const": "request_too_large"
+        },
+        {
+          "description": "Not valid JSON, or not a known request shape.",
+          "type": "string",
+          "const": "malformed_request"
+        },
+        {
+          "description": "Well-formed, but a field fails validation.",
+          "type": "string",
+          "const": "invalid_field"
+        },
+        {
+          "description": "A failure inside the core; a bug, not bad input.",
+          "type": "string",
+          "const": "internal"
+        }
+      ]
+    },
+    "GeodeticAnchorDto": {
+      "description": "A WGS84 position. Height is above the ellipsoid, not mean sea level.",
+      "type": "object",
+      "properties": {
+        "ellipsoidal_height_m": {
+          "description": "Metres above the WGS84 ellipsoid.",
+          "type": "number",
+          "format": "double",
+          "maximum": 100000.0,
+          "minimum": -12000.0
+        },
+        "latitude_deg": {
+          "description": "Degrees, north positive; sites are limited to ±85°.",
+          "type": "number",
+          "format": "double",
+          "maximum": 85.0,
+          "minimum": -85.0
+        },
+        "longitude_deg": {
+          "description": "Degrees, east positive.",
+          "type": "number",
+          "format": "double",
+          "maximum": 180.0,
+          "minimum": -180.0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "longitude_deg",
+        "latitude_deg",
+        "ellipsoidal_height_m"
+      ]
+    },
+    "ProtocolVersion": {
+      "description": "A bridge protocol version. See docs/protocol.md for when each part changes.",
+      "type": "object",
+      "properties": {
+        "major": {
+          "description": "Incompatible changes.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "minor": {
+          "description": "Backward-compatible additions.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "major",
+        "minor"
+      ]
+    },
+    "SceneBoundsDto": {
+      "description": "Per-axis scene bounds in millimetres: x east, y north, z up.",
+      "type": "object",
+      "properties": {
+        "x": {
+          "description": "East axis.",
+          "$ref": "#/$defs/AxisBoundsDto"
+        },
+        "y": {
+          "description": "North axis.",
+          "$ref": "#/$defs/AxisBoundsDto"
+        },
+        "z": {
+          "description": "Up axis.",
+          "$ref": "#/$defs/AxisBoundsDto"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y",
+        "z"
+      ]
+    },
+    "SiteDto": {
+      "description": "A site's identity, anchor, and scene bounds (docs/coordinates.md).",
+      "type": "object",
+      "properties": {
+        "anchor": {
+          "description": "Origin of the ENU scene frame.",
+          "$ref": "#/$defs/GeodeticAnchorDto"
+        },
+        "bounds": {
+          "description": "Region of the scene frame the site occupies.",
+          "$ref": "#/$defs/SceneBoundsDto"
+        },
+        "name": {
+          "description": "Display name, at most 128 bytes. Untrusted: render as text only.",
+          "type": "string",
+          "maxLength": 128,
+          "minLength": 1
+        },
+        "site_id": {
+          "description": "Lowercase slug, at most 64 bytes.",
+          "type": "string",
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "site_id",
+        "name",
+        "anchor",
+        "bounds"
+      ]
+    },
+    "UiRequest": {
+      "description": "A request from the UI thread.",
+      "oneOf": [
+        {
+          "description": "First message on a new worker: offer the UI's protocol version.",
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "description": "Protocol the UI speaks.",
+              "$ref": "#/$defs/ProtocolVersion"
+            },
+            "type": {
+              "type": "string",
+              "const": "hello"
+            },
+            "ui_build": {
+              "description": "UI build identifier, for diagnostics only.",
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[!-~]+$"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "protocol",
+            "ui_build"
+          ]
+        }
+      ]
+    }
+  }
+}

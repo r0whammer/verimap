@@ -44,8 +44,10 @@ scalar guards. They do not by themselves prove that scene state only holds
 valid values; that needs the domain store's use of the guards to enter the
 model (or a justified composition argument), which it has not yet.
 
-**Last checked:** rows 1a–1d were checked with `just verify` on 2026-10-25
-in the commit that introduced them. Later commits record the revision here.
+**Last checked:** rows 1a–1d were introduced and checked in commit
+`896e1c5`. On 2026-10-25, `just verify` (regeneration, `lake build`, and the
+audit) checked them again on the tree of the commit that follows `896e1c5`.
+The kernel source did not change between the two.
 
 ## Tested, not proved
 

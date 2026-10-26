@@ -1,0 +1,21 @@
+[package]
+name = "verimap-wasm"
+description = "Browser bindings: the VeriMap core as seen by the web worker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# Bindings only: no domain logic of their own.
+[dependencies]
+verimap-domain.workspace = true
+verimap-protocol.workspace = true
+verimap-sim.workspace = true
+serde_json.workspace = true
+wasm-bindgen.workspace = true
+
+[lints]
+workspace = true

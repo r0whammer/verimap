@@ -1,0 +1,282 @@
+:root {
+  color-scheme: dark;
+  --bg: #0d1117;
+  --panel: #161b22;
+  --raised: #21262d;
+  --text: #e6edf3;
+  --muted: #9da7b3;
+  --border: #3d444d;
+  --accent: #e8c547;
+  --pressed: #1f6feb;
+  --focus: #79c0ff;
+  --ok: #3fb950;
+  --warn: #d29922;
+  --danger: #ff7b72;
+  --target: 44px;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  /* The map handles its own gestures; the page itself never scrolls. */
+  overflow: hidden;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  height: 100dvh;
+}
+
+.map-area {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.map {
+  position: absolute;
+  inset: 0;
+  /* Pinch and drag go to the map, not to browser page zoom or scroll. */
+  touch-action: none;
+}
+
+.toolbar {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: calc(env(safe-area-inset-left) + 12px);
+  right: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toolbar > * {
+  pointer-events: auto;
+}
+
+button {
+  min-width: var(--target);
+  min-height: var(--target);
+  padding: 0 14px;
+  font: inherit;
+  color: var(--text);
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+button[aria-pressed='true'] {
+  background: var(--pressed);
+  border-color: var(--pressed);
+  font-weight: 600;
+}
+
+.segmented {
+  display: inline-flex;
+}
+
+.segmented button:first-child {
+  border-radius: 8px 0 0 8px;
+}
+
+.segmented button:last-child {
+  border-radius: 0 8px 8px 0;
+  margin-left: -1px;
+}
+
+.panel {
+  overflow-y: auto;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  padding: 16px calc(env(safe-area-inset-right) + 16px) 16px 16px;
+}
+
+.panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+h2 {
+  margin: 20px 0 6px;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+p {
+  margin: 6px 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.mono {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+
+dt {
+  color: var(--muted);
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Status badges carry their meaning in text; colour is only reinforcement. */
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-weight: 600;
+}
+
+.badge-starting {
+  color: var(--warn);
+}
+
+.badge-ready {
+  color: var(--ok);
+}
+
+.badge-incompatible,
+.badge-failed {
+  color: var(--danger);
+}
+
+.problem {
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+
+ul.problem {
+  margin: 8px 0;
+  padding-left: 18px;
+}
+
+.legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.legend li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 4px 0;
+}
+
+.swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  transform: translateY(2px);
+}
+
+.swatch-grid {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.4) 1px, transparent 1px) 0 0 / 5px 5px,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.4) 1px, transparent 1px) 0 0 / 5px 5px,
+    #3a4a3e;
+}
+
+.swatch-bounds {
+  border: 2px solid var(--accent);
+}
+
+.swatch-anchor {
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #000;
+}
+
+.sheet-toggle {
+  display: none;
+}
+
+/* Narrow screens: the panel becomes a bottom sheet under the map. */
+@media (max-width: 767px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .panel {
+    max-height: 45dvh;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding: 10px calc(env(safe-area-inset-right) + 16px) calc(env(safe-area-inset-bottom) + 12px)
+      calc(env(safe-area-inset-left) + 16px);
+  }
+
+  .sheet-toggle {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+  }
+
+  .panel[data-collapsed='true'] .panel-body {
+    display: none;
+  }
+}
+
+/* Keep Cesium's credit line above the safe-area inset. */
+.map .cesium-widget-credits {
+  bottom: env(safe-area-inset-bottom);
+}
