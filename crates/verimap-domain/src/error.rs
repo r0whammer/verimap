@@ -36,6 +36,11 @@ pub enum DomainError {
         /// Offending field.
         field: &'static str,
     },
+    /// A value outside the site's scene bounds.
+    OutsideSite {
+        /// Offending field.
+        field: &'static str,
+    },
     /// A string that is empty, too long, or uses disallowed characters.
     InvalidText {
         /// Offending field.
@@ -52,6 +57,8 @@ impl DomainError {
             KernelError::ConfidenceOutOfRange => Self::ConfidenceOutOfRange { field },
             KernelError::CoordinateOutOfRange => Self::CoordinateOutOfRange { field },
             KernelError::BoundsInverted => Self::BoundsInverted { field },
+            // Only `next_sequence` reports this, and it never validates a field.
+            KernelError::SequenceExhausted => Self::OutOfRange { field },
         }
     }
 
@@ -64,6 +71,7 @@ impl DomainError {
             | Self::EmptyExtent { field }
             | Self::NonFinite { field }
             | Self::OutOfRange { field }
+            | Self::OutsideSite { field }
             | Self::InvalidText { field, .. } => field,
         }
     }
@@ -82,6 +90,7 @@ impl fmt::Display for DomainError {
             Self::EmptyExtent { field } => write!(f, "{field}: interval has no extent"),
             Self::NonFinite { field } => write!(f, "{field}: not a finite number"),
             Self::OutOfRange { field } => write!(f, "{field}: outside the documented range"),
+            Self::OutsideSite { field } => write!(f, "{field}: outside the site bounds"),
             Self::InvalidText { field, reason } => write!(f, "{field}: {reason}"),
         }
     }

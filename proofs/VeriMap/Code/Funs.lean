@@ -22,54 +22,54 @@ set_option maxRecDepth 2048
 namespace VeriMap
 
 /-- [verimap_kernel::{impl core::clone::Clone for verimap_kernel::KernelError}::clone]:
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 28:9-28:14
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 30:9-30:14
     Visibility: public -/
 def KernelError.Insts.CoreCloneClone.clone
   (self : KernelError) : Result KernelError := do
   ok self
 
 /-- Trait implementation: [verimap_kernel::{impl core::clone::Clone for verimap_kernel::KernelError}]
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 28:9-28:14 -/
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 30:9-30:14 -/
 @[reducible]
 def KernelError.Insts.CoreCloneClone : core.clone.Clone KernelError := {
   clone := KernelError.Insts.CoreCloneClone.clone
 }
 
 /-- Trait implementation: [verimap_kernel::{impl core::marker::Copy for verimap_kernel::KernelError}]
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 28:16-28:20 -/
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 30:16-30:20 -/
 @[reducible]
 def KernelError.Insts.CoreMarkerCopy : core.marker.Copy KernelError := {
   cloneInst := KernelError.Insts.CoreCloneClone
 }
 
 /-- [verimap_kernel::CONFIDENCE_MAX]
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 39:0-39:39
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 44:0-44:39
     Visibility: public -/
 @[global_simps, irreducible] def CONFIDENCE_MAX : Std.U16 := 10000#u16
 
 /-- [verimap_kernel::{impl core::clone::Clone for verimap_kernel::Confidence}::clone]:
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 45:9-45:14
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 50:9-50:14
     Visibility: public -/
 def Confidence.Insts.CoreCloneClone.clone
   (self : Confidence) : Result Confidence := do
   ok self
 
 /-- Trait implementation: [verimap_kernel::{impl core::clone::Clone for verimap_kernel::Confidence}]
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 45:9-45:14 -/
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 50:9-50:14 -/
 @[reducible]
 def Confidence.Insts.CoreCloneClone : core.clone.Clone Confidence := {
   clone := Confidence.Insts.CoreCloneClone.clone
 }
 
 /-- Trait implementation: [verimap_kernel::{impl core::marker::Copy for verimap_kernel::Confidence}]
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 45:16-45:20 -/
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 50:16-50:20 -/
 @[reducible]
 def Confidence.Insts.CoreMarkerCopy : core.marker.Copy Confidence := {
   cloneInst := Confidence.Insts.CoreCloneClone
 }
 
 /-- [verimap_kernel::{verimap_kernel::Confidence}::new]:
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 52:4-58:5
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 57:4-63:5
     Visibility: public -/
 def Confidence.new
   (basis_points : Std.U16) :
@@ -80,23 +80,23 @@ def Confidence.new
   else ok (core.result.Result.Err KernelError.ConfidenceOutOfRange)
 
 /-- [verimap_kernel::{verimap_kernel::Confidence}::basis_points]:
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 61:4-63:5
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 66:4-68:5
     Visibility: public -/
 def Confidence.impl.basis_points (self : Confidence) : Result Std.U16 := do
   ok self.basis_points
 
 /-- [verimap_kernel::COORD_MIN_MM]
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 73:0-73:43
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 78:0-78:43
     Visibility: public -/
 @[global_simps, irreducible] def COORD_MIN_MM : Std.I64 := (-100000000)#i64
 
 /-- [verimap_kernel::COORD_MAX_MM]
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 76:0-76:42
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 81:0-81:42
     Visibility: public -/
 @[global_simps, irreducible] def COORD_MAX_MM : Std.I64 := 100000000#i64
 
 /-- [verimap_kernel::coord_in_range]:
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 79:0-81:1
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 84:0-86:1
     Visibility: public -/
 def coord_in_range (v : Std.I64) : Result Bool := do
   if COORD_MIN_MM <= v
@@ -104,28 +104,28 @@ def coord_in_range (v : Std.I64) : Result Bool := do
   else ok false
 
 /-- [verimap_kernel::{impl core::clone::Clone for verimap_kernel::AxisBoundsMm}::clone]:
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 86:9-86:14
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 91:9-91:14
     Visibility: public -/
 def AxisBoundsMm.Insts.CoreCloneClone.clone
   (self : AxisBoundsMm) : Result AxisBoundsMm := do
   ok self
 
 /-- Trait implementation: [verimap_kernel::{impl core::clone::Clone for verimap_kernel::AxisBoundsMm}]
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 86:9-86:14 -/
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 91:9-91:14 -/
 @[reducible]
 def AxisBoundsMm.Insts.CoreCloneClone : core.clone.Clone AxisBoundsMm := {
   clone := AxisBoundsMm.Insts.CoreCloneClone.clone
 }
 
 /-- Trait implementation: [verimap_kernel::{impl core::marker::Copy for verimap_kernel::AxisBoundsMm}]
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 86:16-86:20 -/
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 91:16-91:20 -/
 @[reducible]
 def AxisBoundsMm.Insts.CoreMarkerCopy : core.marker.Copy AxisBoundsMm := {
   cloneInst := AxisBoundsMm.Insts.CoreCloneClone
 }
 
 /-- [verimap_kernel::{verimap_kernel::AxisBoundsMm}::new]:
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 96:4-104:5
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 101:4-109:5
     Visibility: public -/
 def AxisBoundsMm.new
   (min : Std.I64) (max : Std.I64) :
@@ -144,24 +144,160 @@ def AxisBoundsMm.new
   else ok (core.result.Result.Err KernelError.CoordinateOutOfRange)
 
 /-- [verimap_kernel::{verimap_kernel::AxisBoundsMm}::min]:
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 107:4-109:5
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 112:4-114:5
     Visibility: public -/
 def AxisBoundsMm.impl.min (self : AxisBoundsMm) : Result Std.I64 := do
   ok self.min
 
 /-- [verimap_kernel::{verimap_kernel::AxisBoundsMm}::max]:
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 112:4-114:5
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 117:4-119:5
     Visibility: public -/
 def AxisBoundsMm.impl.max (self : AxisBoundsMm) : Result Std.I64 := do
   ok self.max
 
 /-- [verimap_kernel::{verimap_kernel::AxisBoundsMm}::contains]:
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 117:4-119:5
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 122:4-124:5
     Visibility: public -/
 def AxisBoundsMm.contains
   (self : AxisBoundsMm) (v : Std.I64) : Result Bool := do
   if self.min <= v
   then ok (v <= self.max)
   else ok false
+
+/-- [verimap_kernel::SEQUENCE_MAX]
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 129:0-129:39
+    Visibility: public -/
+@[global_simps, irreducible] def SEQUENCE_MAX : Std.U64 := core.num.U64.MAX
+
+/-- [verimap_kernel::next_sequence]:
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 133:0-139:1
+    Visibility: public -/
+def next_sequence
+  (last : Std.U64) : Result (core.result.Result Std.U64 KernelError) := do
+  if last < SEQUENCE_MAX
+  then let i ← last + 1#u64
+       ok (core.result.Result.Ok i)
+  else ok (core.result.Result.Err KernelError.SequenceExhausted)
+
+/-- [verimap_kernel::{impl core::clone::Clone for verimap_kernel::Slot}::clone]:
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 146:9-146:14
+    Visibility: public -/
+def Slot.Insts.CoreCloneClone.clone (self : Slot) : Result Slot := do
+  ok self
+
+/-- Trait implementation: [verimap_kernel::{impl core::clone::Clone for verimap_kernel::Slot}]
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 146:9-146:14 -/
+@[reducible]
+def Slot.Insts.CoreCloneClone : core.clone.Clone Slot := {
+  clone := Slot.Insts.CoreCloneClone.clone
+}
+
+/-- Trait implementation: [verimap_kernel::{impl core::marker::Copy for verimap_kernel::Slot}]
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 146:16-146:20 -/
+@[reducible]
+def Slot.Insts.CoreMarkerCopy : core.marker.Copy Slot := {
+  cloneInst := Slot.Insts.CoreCloneClone
+}
+
+/-- [verimap_kernel::{impl core::clone::Clone for verimap_kernel::Decision}::clone]:
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 164:9-164:14
+    Visibility: public -/
+def Decision.Insts.CoreCloneClone.clone
+  (self : Decision) : Result Decision := do
+  ok self
+
+/-- Trait implementation: [verimap_kernel::{impl core::clone::Clone for verimap_kernel::Decision}]
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 164:9-164:14 -/
+@[reducible]
+def Decision.Insts.CoreCloneClone : core.clone.Clone Decision := {
+  clone := Decision.Insts.CoreCloneClone.clone
+}
+
+/-- Trait implementation: [verimap_kernel::{impl core::marker::Copy for verimap_kernel::Decision}]
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 164:16-164:20 -/
+@[reducible]
+def Decision.Insts.CoreMarkerCopy : core.marker.Copy Decision := {
+  cloneInst := Decision.Insts.CoreCloneClone
+}
+
+/-- [verimap_kernel::{impl core::clone::Clone for verimap_kernel::Transition}::clone]:
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 181:9-181:14
+    Visibility: public -/
+def Transition.Insts.CoreCloneClone.clone
+  (self : Transition) : Result Transition := do
+  ok self
+
+/-- Trait implementation: [verimap_kernel::{impl core::clone::Clone for verimap_kernel::Transition}]
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 181:9-181:14 -/
+@[reducible]
+def Transition.Insts.CoreCloneClone : core.clone.Clone Transition := {
+  clone := Transition.Insts.CoreCloneClone.clone
+}
+
+/-- Trait implementation: [verimap_kernel::{impl core::marker::Copy for verimap_kernel::Transition}]
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 181:16-181:20 -/
+@[reducible]
+def Transition.Insts.CoreMarkerCopy : core.marker.Copy Transition := {
+  cloneInst := Transition.Insts.CoreCloneClone
+}
+
+/-- [verimap_kernel::slot_upsert]:
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 193:0-241:1
+    Visibility: public -/
+def slot_upsert
+  (slot : Slot) (revision : Std.U64) (same_content : Bool) :
+  Result Transition
+  := do
+  match slot with
+  | Slot.Vacant =>
+    ok { decision := Decision.Apply, slot := (Slot.Live revision) }
+  | Slot.Live current =>
+    if revision > current
+    then ok { decision := Decision.Apply, slot := (Slot.Live revision) }
+    else
+      if revision < current
+      then ok { decision := Decision.Stale, slot }
+      else
+        if same_content
+        then ok { decision := Decision.Duplicate, slot }
+        else ok { decision := Decision.Conflict, slot }
+  | Slot.Deleted deleted =>
+    if revision < deleted
+    then ok { decision := Decision.Stale, slot }
+    else
+      if revision = deleted
+      then ok { decision := Decision.Conflict, slot }
+      else ok { decision := Decision.Tombstoned, slot }
+
+/-- [verimap_kernel::slot_delete]:
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 244:0-287:1
+    Visibility: public -/
+def slot_delete (slot : Slot) (revision : Std.U64) : Result Transition := do
+  match slot with
+  | Slot.Vacant => ok { decision := Decision.Missing, slot := Slot.Vacant }
+  | Slot.Live current =>
+    if revision > current
+    then ok { decision := Decision.Apply, slot := (Slot.Deleted revision) }
+    else
+      if revision < current
+      then ok { decision := Decision.Stale, slot }
+      else ok { decision := Decision.Conflict, slot }
+  | Slot.Deleted deleted =>
+    if revision < deleted
+    then ok { decision := Decision.Stale, slot }
+    else
+      if revision = deleted
+      then ok { decision := Decision.Duplicate, slot }
+      else ok { decision := Decision.Tombstoned, slot }
+
+/-- [verimap_kernel::base_revision_matches]:
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 292:0-297:1
+    Visibility: public -/
+def base_revision_matches
+  (slot : Slot) (base_revision : Std.U64) : Result Bool := do
+  match slot with
+  | Slot.Vacant => ok false
+  | Slot.Live revision => ok (revision = base_revision)
+  | Slot.Deleted _ => ok false
 
 end VeriMap

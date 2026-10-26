@@ -89,13 +89,14 @@ those recipes exist.
 
 ```text
 crates/verimap-kernel/    # extracted to Lean; no_std, no dependencies
-crates/verimap-domain/    # validated domain types; uses the kernel
+crates/verimap-domain/    # scene store, commands/events, journal, replay, tracker; uses the kernel
 crates/verimap-protocol/  # wire DTOs, bounded parsing, JSON Schema generation
-crates/verimap-sim/       # the bundled synthetic site
+crates/verimap-sim/       # seeded synthetic site, simulated detector, local session
 crates/verimap-wasm/      # browser bindings; no domain logic of its own
 web/                      # React + Cesium client, worker bridge, e2e tests
 proofs/                   # Lean project: generated Code/, Spec/, Properties/, Audit
 schemas/                  # generated JSON Schemas (committed)
+fixtures/                 # expected replay state hashes shared by Rust and browser tests
 scripts/                  # translation, audit, generated-file and toolchain checks
 docs/                     # status, verification, protocol, coordinates, ADRs
 ```

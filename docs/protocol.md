@@ -1,6 +1,6 @@
 # Worker bridge protocol
 
-The messages between the UI thread and the core worker. Version **0.1**.
+The messages between the UI thread and the core worker. Version **0.2**.
 The source of truth is `crates/verimap-protocol`. Never edit the generated
 files `schemas/worker-bridge.schema.json` (JSON Schema 2020-12) and
 `web/src/generated/protocol.ts` by hand. Regenerate them with `just gen`;
@@ -10,25 +10,111 @@ files `schemas/worker-bridge.schema.json` (JSON Schema 2020-12) and
 
 The UI starts a dedicated module worker (`web/src/worker/core.worker.ts`).
 The worker loads the WASM core and passes each message to `Core.handle` as a
-JSON string. Each request produces one event. The worker posts the parsed
-event back to the UI. Messages are JSON objects tagged by `type`.
+JSON string. Each request produces exactly one event, and events come back
+in request order. The worker posts the parsed event back to the UI.
+Messages are JSON objects tagged by `type`.
+
+The UI (`web/src/worker/bridge.ts`) matches answers to requests by that
+order: it keeps a FIFO of pending requests, and an event with no pending
+request fails the session. Requests sent before the handshake completes, or
+pending when the worker fails, resolve with an `internal` error instead of
+hanging.
 
 TypeScript types describe the messages but validate nothing at runtime. The
 Rust side parses and validates every request. The UI checks that an event
 has a known `type` and fails the session if it does not.
 
-## Messages (0.1)
+## Messages (0.2)
 
-| Direction | `type` | Fields | Meaning |
+Requests (UI → core):
+
+| `type` | Fields | Mode | Effect |
 | --- | --- | --- | --- |
-| UI → core | `hello` | `protocol`, `ui_build` | Opens the session. Must be first. |
-| core → UI | `ready` | `protocol`, `core_build`, `site` | Handshake accepted; `site` is the bundled site's frame and bounds. |
-| core → UI | `incompatible` | `core_protocol`, `ui_protocol` | The core cannot serve this UI; the UI terminates the worker. |
-| core → UI | `error` | `code`, `message` | The request was rejected; session state is unchanged. |
+| `hello` | `protocol`, `ui_build` | before handshake | Opens the session. Must be first. |
+| `advance` | `ticks` (1–100) | live | Runs the simulation and pipeline one tick at a time. |
+| `add_marker` | `label`, `at` | live | Commits a new operator marker. |
+| `edit_marker` | `id`, `base_revision`, `label?`, `at?` | live | Relabels and/or moves a marker if it is still at `base_revision`. |
+| `delete_annotation` | `id`, `base_revision` | live | Deletes (tombstones) a marker. |
+| `remove_entity` | `id`, `base_revision` | live | Deletes (tombstones) a track. |
+| `inspect_entity` | `id` | either | A track's details and history in the current view. |
+| `review` | `tick` | either | Shows the state at `tick` (clamped to the live tick), replayed from the journal. |
+| `review_step` | `ticks` (1–100) | review | Moves the review forward through the journal. |
+| `go_live` | — | either | Leaves review. |
+| `state_hash` | — | either | Canonical state hash of the current view. |
+
+Events (core → UI):
+
+| `type` | Fields | Answers |
+| --- | --- | --- |
+| `ready` | `protocol`, `core_build`, `site`, `session`, `scene` | `hello` accepted. `scene` is a complete (replacing) view. |
+| `incompatible` | `core_protocol`, `ui_protocol` | `hello` refused. The UI terminates the worker. |
+| `scene` | `update` | Every request that changes or switches the view. |
+| `entity_detail` | `detail` | `inspect_entity`. |
+| `state_hash` | `tick`, `sequence`, `hash` | `state_hash`. |
+| `error` | `code`, `message` | Any request that was refused. No state changed. |
 
 Error codes: `request_too_large`, `malformed_request`, `invalid_field`,
-`internal`. `message` is diagnostic text for people. The UI renders it as
-text and never interprets it.
+`handshake_required`, `not_found`, `deleted`, `precondition_failed`,
+`wrong_mode`, `journal_full`, `rejected`, `internal`. `message` is
+diagnostic text for people. The UI renders it as text and never interprets
+it.
+
+### Scene updates
+
+`SceneUpdateDto` carries what the view shows, not raw observations:
+
+- `replace: true`: the lists are the complete view, and the UI discards
+  everything else (`ready`, `review`, `go_live`).
+- `replace: false`: upserts (`entities`, `annotations`) and removals
+  (`removed_entities`, `removed_annotations`) by ID. They cover every object
+  the request created, changed, or deleted, and every track whose freshness
+  changed because the clock moved.
+- `timeline`: the view's mode, tick, and last sequence, the live tick and
+  sequence, and the journal's size and bound.
+- `stats`: the live session's observation counts.
+- `problem`: set when a request stopped part way and the update holds only
+  what was done. For example, a full journal stops `advance`.
+
+The UI applies updates in arrival order (`web/src/scene/model.ts`). It makes
+no domain decisions.
+
+### Live and review
+
+The local core runs a single session. `review` replays the committed journal
+from the start into a separate read-only store, up to the last event at or
+before `tick`. While reviewing:
+
+- requests that would change the session (`advance`, edits) fail with
+  `wrong_mode`;
+- the live session does not advance, so scene time is paused;
+- `go_live` discards the review store and shows the unchanged live state.
+
+Reviewing therefore never mutates the live session. The e2e suite checks
+this by comparing the live state hash before and after a review.
+
+### Edits and revisions
+
+Every committed event has the next authority sequence, and an object's
+revision is the sequence of the event that last changed it. Edits and
+deletions name the `base_revision` the operator saw. If the object has
+changed since then, the edit fails with `precondition_failed`, and a
+deleted object reports `deleted`. Deletions leave tombstones, so a deleted
+ID is never reused or resurrected in the session.
+
+Marker positions arrive as `PlacedPointDto`: metres plus a `placement`
+saying where the height came from. In 0.2 the only placement is
+`ground_plane`, which stores the marker at z = 0 m. The UI states that this
+is an assumed height, not a measured surface.
+
+### State hash
+
+`state_hash` is the 64-bit FNV-1a of the view's canonical encoding
+(`verimap_domain::canonical`). The encoding writes fields in a fixed order
+and maps in ID order, so native and WASM builds produce the same bytes for
+the same events. It is a checksum for comparing replays, not a
+cryptographic digest. `fixtures/replay/demo-seed-1.json` records native
+hashes of the seeded demo session at several ticks. The Rust tests and the
+browser e2e suite (WASM) both compare against it.
 
 ## Validation before use
 
@@ -38,7 +124,15 @@ text and never interprets it.
    parsing;
 2. shape: valid JSON matching a known message. Unknown fields and unknown
    `type` values are rejected (`deny_unknown_fields`);
-3. fields: `ui_build` must be 1–64 printable ASCII characters.
+3. fields: `ui_build` must be 1–64 printable ASCII characters; `ticks`
+   must be 1–100 (`MAX_TICKS_PER_REQUEST`); `u64` strings must be
+   canonical (below).
+
+Domain values are validated when the request is converted to a command:
+IDs, labels (1–128 bytes of UTF-8 without control characters), finite
+coordinates that round to millimetres within range, and positions inside
+the site. The command is checked against the current state before anything
+is committed.
 
 A rejected request produces an `error` event and does not change the
 session.
@@ -71,8 +165,15 @@ UI/worker/WASM bundle, so a mixed-version bundle is never activated.
 - Coordinates are integer millimetres within ±10⁸ (see
   [coordinates.md](coordinates.md)). These are exact as JSON numbers in
   JavaScript, because 10⁸ is far below 2⁵³.
-- 64-bit values (sequences, timestamps) must be decimal strings, never JSON
-  numbers. None exist in 0.1.
+- 64-bit values (sequences, revisions, ticks, counts, the seed) are
+  `U64String`: a canonical decimal string with no sign, no leading zeros
+  (except `"0"`), and at most 20 digits, within `u64`. They are never JSON
+  numbers, so JavaScript cannot round them. The UI converts one to a
+  `Number` only for a slider, and only when it is a safe integer; scene time
+  is formatted with `BigInt`.
+- Positions in requests are metres (`PointMDto`, finite `f64`). The core
+  rounds them to millimetres, half away from zero, and rejects
+  out-of-range values.
 - Floating-point values (anchor degrees and metres) are JSON numbers and
   must be finite. Rust rejects non-finite values in domain conversion.
 - **String lengths:** the schema's `maxLength` counts Unicode code points,

@@ -19,9 +19,43 @@
   ],
   "x-verimap-protocol-version": {
     "major": 0,
-    "minor": 1
+    "minor": 2
   },
   "$defs": {
+    "AnnotationDto": {
+      "description": "An operator annotation.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Stable ID, `namespace:local`.",
+          "type": "string"
+        },
+        "label": {
+          "description": "Label. Untrusted: render as text only.",
+          "type": "string"
+        },
+        "placement": {
+          "description": "Where its height came from.",
+          "$ref": "#/$defs/PlacementDto"
+        },
+        "position": {
+          "description": "Marker position.",
+          "$ref": "#/$defs/PointMmDto"
+        },
+        "revision": {
+          "description": "Sequence of the event that last changed it; edits must name it.",
+          "$ref": "#/$defs/U64String"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "position",
+        "placement",
+        "revision"
+      ]
+    },
     "AxisBoundsDto": {
       "description": "A closed interval of scene coordinates in integer millimetres.\n\nValues are within ±10⁸, so they are exact as JSON numbers in JavaScript.",
       "type": "object",
@@ -62,6 +96,14 @@
               "description": "Protocol the core speaks.",
               "$ref": "#/$defs/ProtocolVersion"
             },
+            "scene": {
+              "description": "The complete initial view.",
+              "$ref": "#/$defs/SceneUpdateDto"
+            },
+            "session": {
+              "description": "Session versions and parameters.",
+              "$ref": "#/$defs/SessionDto"
+            },
             "site": {
               "description": "The session's site frame.",
               "$ref": "#/$defs/SiteDto"
@@ -76,7 +118,77 @@
             "type",
             "protocol",
             "core_build",
-            "site"
+            "site",
+            "session",
+            "scene"
+          ]
+        },
+        {
+          "description": "What the view shows changed (or, for a request that changed nothing,\nthe unchanged timeline).",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "scene"
+            },
+            "update": {
+              "description": "The change.",
+              "$ref": "#/$defs/SceneUpdateDto"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "update"
+          ]
+        },
+        {
+          "description": "A track's details in the current view.",
+          "type": "object",
+          "properties": {
+            "detail": {
+              "description": "The track and its history.",
+              "$ref": "#/$defs/EntityDetailDto"
+            },
+            "type": {
+              "type": "string",
+              "const": "entity_detail"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "detail"
+          ]
+        },
+        {
+          "description": "The canonical state hash of the current view (docs/protocol.md).",
+          "type": "object",
+          "properties": {
+            "hash": {
+              "description": "64-bit FNV-1a of the canonical encoding, 16 lowercase hex digits.",
+              "type": "string",
+              "pattern": "^[0-9a-f]{16}$"
+            },
+            "sequence": {
+              "description": "Last sequence included.",
+              "$ref": "#/$defs/U64String"
+            },
+            "tick": {
+              "description": "Scene tick of the view.",
+              "$ref": "#/$defs/U64String"
+            },
+            "type": {
+              "type": "string",
+              "const": "state_hash"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "tick",
+            "sequence",
+            "hash"
           ]
         },
         {
@@ -129,6 +241,100 @@
         }
       ]
     },
+    "EntityClassDto": {
+      "description": "Believed class of a track: detector output, not a verified identity.",
+      "type": "string",
+      "enum": [
+        "person",
+        "animal",
+        "vehicle",
+        "building",
+        "obstacle",
+        "sensor",
+        "unknown"
+      ]
+    },
+    "EntityDetailDto": {
+      "description": "A track with its observation history, for the detail panel.",
+      "type": "object",
+      "properties": {
+        "entity": {
+          "description": "Current state.",
+          "$ref": "#/$defs/EntityDto"
+        },
+        "history": {
+          "description": "Most recent fixes, oldest first (at most 16).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FixDto"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "entity",
+        "history"
+      ]
+    },
+    "EntityDto": {
+      "description": "A track as the map shows it.",
+      "type": "object",
+      "properties": {
+        "class": {
+          "description": "Believed class.",
+          "$ref": "#/$defs/EntityClassDto"
+        },
+        "confidence_bp": {
+          "description": "Detector confidence, basis points (0–10000). Not a calibrated\nprobability.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 10000,
+          "minimum": 0
+        },
+        "freshness": {
+          "description": "Freshness at the view's scene time.",
+          "$ref": "#/$defs/FreshnessDto"
+        },
+        "id": {
+          "description": "Stable track ID, `namespace:local`. Not a real-world identity.",
+          "type": "string"
+        },
+        "last_observed_tick": {
+          "description": "Acquisition tick of the latest fix.",
+          "$ref": "#/$defs/U64String"
+        },
+        "position": {
+          "description": "Latest position.",
+          "$ref": "#/$defs/PointMmDto"
+        },
+        "revision": {
+          "description": "Sequence of the event that last changed the track.",
+          "$ref": "#/$defs/U64String"
+        },
+        "sigma_mm": {
+          "description": "Horizontal 1σ uncertainty, millimetres.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "source": {
+          "description": "Source of the latest fix.",
+          "$ref": "#/$defs/SourceRefDto"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "class",
+        "position",
+        "sigma_mm",
+        "confidence_bp",
+        "freshness",
+        "last_observed_tick",
+        "revision",
+        "source"
+      ]
+    },
     "ErrorCode": {
       "description": "Why a request was rejected.",
       "oneOf": [
@@ -148,9 +354,108 @@
           "const": "invalid_field"
         },
         {
+          "description": "A request other than `hello` before a successful handshake.",
+          "type": "string",
+          "const": "handshake_required"
+        },
+        {
+          "description": "The named object does not exist.",
+          "type": "string",
+          "const": "not_found"
+        },
+        {
+          "description": "The named object was deleted.",
+          "type": "string",
+          "const": "deleted"
+        },
+        {
+          "description": "The object changed since the edit's base revision.",
+          "type": "string",
+          "const": "precondition_failed"
+        },
+        {
+          "description": "The request needs live mode, but the view is reviewing history (or\nthe reverse).",
+          "type": "string",
+          "const": "wrong_mode"
+        },
+        {
+          "description": "The session journal is full; start a new session.",
+          "type": "string",
+          "const": "journal_full"
+        },
+        {
+          "description": "The scene rules refused the change (for example a position outside\nthe site).",
+          "type": "string",
+          "const": "rejected"
+        },
+        {
           "description": "A failure inside the core; a bug, not bad input.",
           "type": "string",
           "const": "internal"
+        }
+      ]
+    },
+    "FixDto": {
+      "description": "One past fix in a track's history.",
+      "type": "object",
+      "properties": {
+        "acquired_tick": {
+          "description": "Acquisition tick.",
+          "$ref": "#/$defs/U64String"
+        },
+        "confidence_bp": {
+          "description": "Detector confidence, basis points.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 10000,
+          "minimum": 0
+        },
+        "position": {
+          "description": "Measured position.",
+          "$ref": "#/$defs/PointMmDto"
+        },
+        "revision": {
+          "description": "Sequence of the event that recorded it.",
+          "$ref": "#/$defs/U64String"
+        },
+        "sigma_mm": {
+          "description": "Horizontal 1σ uncertainty, millimetres.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "source": {
+          "description": "Source observation.",
+          "$ref": "#/$defs/SourceRefDto"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "acquired_tick",
+        "position",
+        "sigma_mm",
+        "confidence_bp",
+        "source",
+        "revision"
+      ]
+    },
+    "FreshnessDto": {
+      "description": "How recently a track was observed, by the scene clock.",
+      "oneOf": [
+        {
+          "description": "Observed within the last 3 s of scene time.",
+          "type": "string",
+          "const": "active"
+        },
+        {
+          "description": "Not observed for more than 3 s.",
+          "type": "string",
+          "const": "stale"
+        },
+        {
+          "description": "Not observed for more than 15 s; still a track until deleted.",
+          "type": "string",
+          "const": "expired"
         }
       ]
     },
@@ -185,6 +490,148 @@
         "longitude_deg",
         "latitude_deg",
         "ellipsoidal_height_m"
+      ]
+    },
+    "IngestStatsDto": {
+      "description": "Observation counts since the session started.",
+      "type": "object",
+      "properties": {
+        "accepted": {
+          "description": "Committed as track events.",
+          "$ref": "#/$defs/U64String"
+        },
+        "duplicates": {
+          "description": "Duplicates of accepted observations.",
+          "$ref": "#/$defs/U64String"
+        },
+        "late": {
+          "description": "Older than the matched track's latest fix; not applied.",
+          "$ref": "#/$defs/U64String"
+        },
+        "received": {
+          "description": "Delivered by sources.",
+          "$ref": "#/$defs/U64String"
+        },
+        "rejected": {
+          "description": "Rejected by validation.",
+          "$ref": "#/$defs/U64String"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "received",
+        "accepted",
+        "rejected",
+        "duplicates",
+        "late"
+      ]
+    },
+    "PlacedPointDto": {
+      "description": "A picked position and where its height came from.",
+      "type": "object",
+      "properties": {
+        "placement": {
+          "description": "Height source; a ground-plane placement is stored at z = 0.",
+          "$ref": "#/$defs/PlacementDto"
+        },
+        "position": {
+          "description": "Position, metres.",
+          "$ref": "#/$defs/PointMDto"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "position",
+        "placement"
+      ]
+    },
+    "PlacementDto": {
+      "description": "Where an annotation's height came from.",
+      "oneOf": [
+        {
+          "description": "On the scene's ground plane, z = 0 m: an assumed height.",
+          "type": "string",
+          "const": "ground_plane"
+        }
+      ]
+    },
+    "PointMDto": {
+      "description": "A position the UI picked, in scene-frame metres. The core quantizes it\nto millimetres and validates it against the site.",
+      "type": "object",
+      "properties": {
+        "x_m": {
+          "description": "East, metres.",
+          "type": "number",
+          "format": "double"
+        },
+        "y_m": {
+          "description": "North, metres.",
+          "type": "number",
+          "format": "double"
+        },
+        "z_m": {
+          "description": "Up, metres.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "x_m",
+        "y_m",
+        "z_m"
+      ]
+    },
+    "PointMmDto": {
+      "description": "A scene position in integer millimetres (ENU from the anchor). Values\nare within ±10⁸, so they are exact as JSON numbers.",
+      "type": "object",
+      "properties": {
+        "x_mm": {
+          "description": "East.",
+          "type": "integer",
+          "format": "int64",
+          "maximum": 100000000,
+          "minimum": -100000000
+        },
+        "y_mm": {
+          "description": "North.",
+          "type": "integer",
+          "format": "int64",
+          "maximum": 100000000,
+          "minimum": -100000000
+        },
+        "z_mm": {
+          "description": "Up.",
+          "type": "integer",
+          "format": "int64",
+          "maximum": 100000000,
+          "minimum": -100000000
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "x_mm",
+        "y_mm",
+        "z_mm"
+      ]
+    },
+    "ProblemDto": {
+      "description": "A problem reported alongside a partial result.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "Machine-readable reason.",
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "message": {
+          "description": "Human-readable detail. Render as text only.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message"
       ]
     },
     "ProtocolVersion": {
@@ -236,6 +683,130 @@
         "z"
       ]
     },
+    "SceneUpdateDto": {
+      "description": "A change to what the view shows.",
+      "type": "object",
+      "properties": {
+        "annotations": {
+          "description": "Annotations added or changed.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnnotationDto"
+          }
+        },
+        "entities": {
+          "description": "Tracks added or changed.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EntityDto"
+          }
+        },
+        "problem": {
+          "description": "Why the request stopped early, when the changes above are only part\nof what was asked (for example a full journal stops the simulation).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProblemDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "removed_annotations": {
+          "description": "Annotation IDs no longer present.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "removed_entities": {
+          "description": "Track IDs no longer present (deleted, or absent in a review state).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "replace": {
+          "description": "When true, the lists below are the complete view: discard\neverything else. When false, they are changes to apply.",
+          "type": "boolean"
+        },
+        "stats": {
+          "description": "Observation counts (live session).",
+          "$ref": "#/$defs/IngestStatsDto"
+        },
+        "timeline": {
+          "description": "Where the view is.",
+          "$ref": "#/$defs/TimelineDto"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "replace",
+        "timeline",
+        "stats",
+        "entities",
+        "removed_entities",
+        "annotations",
+        "removed_annotations"
+      ]
+    },
+    "SessionDto": {
+      "description": "Versions and parameters of the running session.",
+      "type": "object",
+      "properties": {
+        "event_schema_version": {
+          "description": "Committed-event format and reducer version.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "expire_after_ticks": {
+          "description": "Ticks without observation before a track is expired.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "scene_version": {
+          "description": "Synthetic scene version.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "seed": {
+          "description": "Simulation seed.",
+          "$ref": "#/$defs/U64String"
+        },
+        "simulator_version": {
+          "description": "Simulator behavior version.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "stale_after_ticks": {
+          "description": "Ticks without observation before a track is stale.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "tick_ms": {
+          "description": "Scene time per tick, milliseconds.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "seed",
+        "simulator_version",
+        "scene_version",
+        "event_schema_version",
+        "tick_ms",
+        "stale_after_ticks",
+        "expire_after_ticks"
+      ]
+    },
     "SiteDto": {
       "description": "A site's identity, anchor, and scene bounds (docs/coordinates.md).",
       "type": "object",
@@ -270,6 +841,74 @@
         "bounds"
       ]
     },
+    "SourceRefDto": {
+      "description": "The observation a state came from.",
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "description": "The source's observation sequence.",
+          "$ref": "#/$defs/U64String"
+        },
+        "source_id": {
+          "description": "Reporting source.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "sequence"
+      ]
+    },
+    "TimelineDto": {
+      "description": "Where the view is in the session.",
+      "type": "object",
+      "properties": {
+        "journal_events": {
+          "description": "Events in the journal.",
+          "$ref": "#/$defs/U64String"
+        },
+        "journal_limit": {
+          "description": "Configured journal bound, in events.",
+          "$ref": "#/$defs/U64String"
+        },
+        "live_sequence": {
+          "description": "Last committed sequence.",
+          "$ref": "#/$defs/U64String"
+        },
+        "live_tick": {
+          "description": "Live scene tick.",
+          "$ref": "#/$defs/U64String"
+        },
+        "mode": {
+          "description": "Live or review.",
+          "$ref": "#/$defs/ViewModeDto"
+        },
+        "sequence": {
+          "description": "Last event sequence included in the view.",
+          "$ref": "#/$defs/U64String"
+        },
+        "tick": {
+          "description": "Scene tick shown.",
+          "$ref": "#/$defs/U64String"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "tick",
+        "sequence",
+        "live_tick",
+        "live_sequence",
+        "journal_events",
+        "journal_limit"
+      ]
+    },
+    "U64String": {
+      "description": "A u64 as a canonical decimal string (no sign or leading zeros). Never convert it to a JavaScript Number unless it is known to be below 2^53.",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,19})$"
+    },
     "UiRequest": {
       "description": "A request from the UI thread.",
       "oneOf": [
@@ -299,6 +938,251 @@
             "protocol",
             "ui_build"
           ]
+        },
+        {
+          "description": "Run the live simulation forward. Live mode only.",
+          "type": "object",
+          "properties": {
+            "ticks": {
+              "description": "Scene ticks to simulate.",
+              "type": "integer",
+              "format": "uint32",
+              "maximum": 100,
+              "minimum": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "advance"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "ticks"
+          ]
+        },
+        {
+          "description": "Place a marker. Live mode only.",
+          "type": "object",
+          "properties": {
+            "at": {
+              "description": "Where.",
+              "$ref": "#/$defs/PlacedPointDto"
+            },
+            "label": {
+              "description": "Label, 1–128 bytes of UTF-8 without control characters.",
+              "type": "string",
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "add_marker"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "label",
+            "at"
+          ]
+        },
+        {
+          "description": "Relabel and/or move a marker. Live mode only.",
+          "type": "object",
+          "properties": {
+            "at": {
+              "description": "New position.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PlacedPointDto"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "base_revision": {
+              "description": "The revision the operator is editing; the edit fails if the\nmarker changed since.",
+              "$ref": "#/$defs/U64String"
+            },
+            "id": {
+              "description": "Annotation ID.",
+              "type": "string"
+            },
+            "label": {
+              "description": "New label.",
+              "type": [
+                "string",
+                "null"
+              ],
+              "default": null,
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "edit_marker"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "id",
+            "base_revision"
+          ]
+        },
+        {
+          "description": "Delete an annotation. Live mode only.",
+          "type": "object",
+          "properties": {
+            "base_revision": {
+              "description": "The revision the operator saw.",
+              "$ref": "#/$defs/U64String"
+            },
+            "id": {
+              "description": "Annotation ID.",
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "delete_annotation"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "id",
+            "base_revision"
+          ]
+        },
+        {
+          "description": "Delete a track. Live mode only.",
+          "type": "object",
+          "properties": {
+            "base_revision": {
+              "description": "The revision the operator saw.",
+              "$ref": "#/$defs/U64String"
+            },
+            "id": {
+              "description": "Track ID.",
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "remove_entity"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "id",
+            "base_revision"
+          ]
+        },
+        {
+          "description": "Ask for a track's details and history in the current view.",
+          "type": "object",
+          "properties": {
+            "id": {
+              "description": "Track ID.",
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "inspect_entity"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "id"
+          ]
+        },
+        {
+          "description": "Show the state at scene tick `tick`, replayed from the journal. The\nlive session pauses and is not changed.",
+          "type": "object",
+          "properties": {
+            "tick": {
+              "description": "Scene tick to show; clamped to the live tick.",
+              "$ref": "#/$defs/U64String"
+            },
+            "type": {
+              "type": "string",
+              "const": "review"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "tick"
+          ]
+        },
+        {
+          "description": "Move a review forward through the journal. Review mode only.",
+          "type": "object",
+          "properties": {
+            "ticks": {
+              "description": "Scene ticks to move.",
+              "type": "integer",
+              "format": "uint32",
+              "maximum": 100,
+              "minimum": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "review_step"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "ticks"
+          ]
+        },
+        {
+          "description": "Leave review and show the live session again. (An empty struct\nvariant, not a unit variant, so unknown fields are still rejected.)",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "go_live"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Ask for the canonical state hash of the current view.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "state_hash"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
+    "ViewModeDto": {
+      "description": "Whether the view shows the live session or a replayed past state.",
+      "oneOf": [
+        {
+          "description": "The live session; edits and simulation are allowed.",
+          "type": "string",
+          "const": "live"
+        },
+        {
+          "description": "A state rebuilt from the journal; read-only. The live session is\npaused and unchanged.",
+          "type": "string",
+          "const": "review"
         }
       ]
     }

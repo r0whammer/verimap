@@ -1,7 +1,9 @@
 //! VeriMap's extracted kernel.
 //!
-//! Small, sequential, dependency-free guards that `verimap-domain` calls
-//! before it accepts a value into scene state. Charon and Aeneas translate
+//! Small, sequential, dependency-free guards and transitions that
+//! `verimap-domain` calls before it accepts a value into scene state: value
+//! bounds, the authority sequence step, and the per-object revision and
+//! tombstone rules ([`slot_upsert`], [`slot_delete`]). Charon and Aeneas translate
 //! this crate, and only this crate, to Lean (`proofs/VeriMap/Code`); the
 //! theorems in `proofs/VeriMap/Properties` are about that generated model.
 //! `docs/verification.md` lists what is proved and what is only tested.
@@ -33,6 +35,9 @@ pub enum KernelError {
     CoordinateOutOfRange,
     /// An interval whose minimum is greater than its maximum.
     BoundsInverted,
+    /// The authority sequence is at [`SEQUENCE_MAX`]; no further event can
+    /// be committed in this epoch.
+    SequenceExhausted,
 }
 
 /// Largest valid confidence: 10 000 basis points, i.e. 100 %.
@@ -116,5 +121,177 @@ impl AxisBoundsMm {
     /// Whether `v` lies in `[min, max]`.
     pub fn contains(self, v: i64) -> bool {
         self.min <= v && v <= self.max
+    }
+}
+
+/// Largest authority sequence number. Sequence 0 means "no event yet", so
+/// the first committed event is 1.
+pub const SEQUENCE_MAX: u64 = u64::MAX;
+
+/// The authority sequence after `last`, or [`KernelError::SequenceExhausted`]
+/// at [`SEQUENCE_MAX`]. Sequences never wrap around.
+pub fn next_sequence(last: u64) -> Result<u64, KernelError> {
+    if last < SEQUENCE_MAX {
+        Ok(last + 1)
+    } else {
+        Err(KernelError::SequenceExhausted)
+    }
+}
+
+/// What the reducer knows about one object ID within a scene epoch.
+///
+/// A revision is the authority sequence of the committed event that last
+/// changed the object. A deleted object keeps a tombstone for the rest of
+/// the epoch, so no later write can bring it back.
+#[derive(Clone, Copy)]
+pub enum Slot {
+    /// No event in this epoch has written the object.
+    Vacant,
+    /// The object exists; last changed at `revision`.
+    Live {
+        /// Sequence of the last change.
+        revision: u64,
+    },
+    /// The object was deleted at `revision`.
+    Deleted {
+        /// Sequence of the deletion.
+        revision: u64,
+    },
+}
+
+/// How a write relates to an object's current [`Slot`]. Only
+/// [`Decision::Apply`] changes the slot.
+#[derive(Clone, Copy)]
+pub enum Decision {
+    /// Newer than the current revision: apply it.
+    Apply,
+    /// The same write at the same revision was already applied: a no-op.
+    Duplicate,
+    /// Older than the current revision: ignore it.
+    Stale,
+    /// The current revision, but different content: reject it.
+    Conflict,
+    /// The object was deleted earlier in this epoch: reject it.
+    Tombstoned,
+    /// A delete of an object this epoch has never seen: reject it.
+    Missing,
+}
+
+/// A decision and the slot that results from it.
+#[derive(Clone, Copy)]
+pub struct Transition {
+    /// How the write relates to the previous slot.
+    pub decision: Decision,
+    /// The slot after the write; equal to the previous slot unless the
+    /// decision is [`Decision::Apply`].
+    pub slot: Slot,
+}
+
+/// Decides a create-or-replace write at `revision`. `same_content` says
+/// whether the write's payload equals the stored one; it matters only when
+/// the revisions are equal.
+pub fn slot_upsert(slot: Slot, revision: u64, same_content: bool) -> Transition {
+    match slot {
+        Slot::Vacant => Transition {
+            decision: Decision::Apply,
+            slot: Slot::Live { revision },
+        },
+        Slot::Live { revision: current } => {
+            if revision > current {
+                Transition {
+                    decision: Decision::Apply,
+                    slot: Slot::Live { revision },
+                }
+            } else if revision < current {
+                Transition {
+                    decision: Decision::Stale,
+                    slot,
+                }
+            } else if same_content {
+                Transition {
+                    decision: Decision::Duplicate,
+                    slot,
+                }
+            } else {
+                Transition {
+                    decision: Decision::Conflict,
+                    slot,
+                }
+            }
+        }
+        Slot::Deleted { revision: deleted } => {
+            if revision < deleted {
+                Transition {
+                    decision: Decision::Stale,
+                    slot,
+                }
+            } else if revision == deleted {
+                Transition {
+                    decision: Decision::Conflict,
+                    slot,
+                }
+            } else {
+                Transition {
+                    decision: Decision::Tombstoned,
+                    slot,
+                }
+            }
+        }
+    }
+}
+
+/// Decides a deletion at `revision`.
+pub fn slot_delete(slot: Slot, revision: u64) -> Transition {
+    match slot {
+        Slot::Vacant => Transition {
+            decision: Decision::Missing,
+            slot,
+        },
+        Slot::Live { revision: current } => {
+            if revision > current {
+                Transition {
+                    decision: Decision::Apply,
+                    slot: Slot::Deleted { revision },
+                }
+            } else if revision < current {
+                Transition {
+                    decision: Decision::Stale,
+                    slot,
+                }
+            } else {
+                Transition {
+                    decision: Decision::Conflict,
+                    slot,
+                }
+            }
+        }
+        Slot::Deleted { revision: deleted } => {
+            if revision < deleted {
+                Transition {
+                    decision: Decision::Stale,
+                    slot,
+                }
+            } else if revision == deleted {
+                Transition {
+                    decision: Decision::Duplicate,
+                    slot,
+                }
+            } else {
+                Transition {
+                    decision: Decision::Tombstoned,
+                    slot,
+                }
+            }
+        }
+    }
+}
+
+/// Whether an edit made against `base_revision` may proceed: the object
+/// exists and has not changed since. Operator edits carry this precondition
+/// so they never silently overwrite a newer change.
+pub fn base_revision_matches(slot: Slot, base_revision: u64) -> bool {
+    match slot {
+        Slot::Live { revision } => revision == base_revision,
+        Slot::Vacant | Slot::Deleted { .. } => false,
     }
 }

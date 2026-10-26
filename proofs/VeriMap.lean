@@ -7,3 +7,5 @@ module
 public import VeriMap.Code.Funs
 public import VeriMap.Spec.Bounds
 public import VeriMap.Properties.Guards
+public import VeriMap.Spec.Slots
+public import VeriMap.Properties.Revisions

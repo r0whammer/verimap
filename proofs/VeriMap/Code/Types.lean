@@ -21,25 +21,54 @@ set_option maxRecDepth 2048
 namespace VeriMap
 
 /-- [verimap_kernel::KernelError]
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 29:0-36:1
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 31:0-41:1
     Visibility: public -/
 @[discriminant isize]
 inductive KernelError where
 | ConfidenceOutOfRange : KernelError
 | CoordinateOutOfRange : KernelError
 | BoundsInverted : KernelError
+| SequenceExhausted : KernelError
 
 /-- [verimap_kernel::Confidence]
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 46:0-48:1
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 51:0-53:1
     Visibility: public -/
 structure Confidence where
   basis_points : Std.U16
 
 /-- [verimap_kernel::AxisBoundsMm]
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 87:0-90:1
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 92:0-95:1
     Visibility: public -/
 structure AxisBoundsMm where
   min : Std.I64
   max : Std.I64
+
+/-- [verimap_kernel::Slot]
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 147:0-160:1
+    Visibility: public -/
+@[discriminant isize]
+inductive Slot where
+| Vacant : Slot
+| Live : Std.U64 → Slot
+| Deleted : Std.U64 → Slot
+
+/-- [verimap_kernel::Decision]
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 165:0-178:1
+    Visibility: public -/
+@[discriminant isize]
+inductive Decision where
+| Apply : Decision
+| Duplicate : Decision
+| Stale : Decision
+| Conflict : Decision
+| Tombstoned : Decision
+| Missing : Decision
+
+/-- [verimap_kernel::Transition]
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 182:0-188:1
+    Visibility: public -/
+structure Transition where
+  decision : Decision
+  slot : Slot
 
 end VeriMap

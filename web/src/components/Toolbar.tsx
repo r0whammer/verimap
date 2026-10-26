@@ -4,14 +4,28 @@ export interface ToolbarProps {
   mode: ViewMode;
   switching: boolean;
   disabled: boolean;
+  /** Whether scene edits are possible (live view, core ready). */
+  editable: boolean;
+  placing: boolean;
   onMode: (mode: ViewMode) => void;
   onHome: () => void;
   onNorthUp: () => void;
+  onAddMarker: () => void;
 }
 
-/** View controls. Each is a button, so keyboard and touch work alike; App
- * also binds the shortcuts shown in each title. */
-export function Toolbar({ mode, switching, disabled, onMode, onHome, onNorthUp }: ToolbarProps) {
+/** View and tool controls. Each is a button, so keyboard and touch work
+ * alike; App also binds the shortcuts shown in each title. */
+export function Toolbar({
+  mode,
+  switching,
+  disabled,
+  editable,
+  placing,
+  onMode,
+  onHome,
+  onNorthUp,
+  onAddMarker,
+}: ToolbarProps) {
   return (
     <div className="toolbar" role="toolbar" aria-label="Map view">
       <div className="segmented" role="group" aria-label="View mode">
@@ -45,6 +59,15 @@ export function Toolbar({ mode, switching, disabled, onMode, onHome, onNorthUp }
         title="Face north (key N); the 2D view is always north-up"
       >
         North up
+      </button>
+      <button
+        type="button"
+        aria-pressed={placing}
+        disabled={disabled || !editable || placing}
+        onClick={onAddMarker}
+        title={editable ? 'Add a marker (key M)' : 'Return to live to edit'}
+      >
+        Add marker
       </button>
     </div>
   );

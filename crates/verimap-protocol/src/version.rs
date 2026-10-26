@@ -12,7 +12,7 @@ pub struct ProtocolVersion {
 }
 
 /// The protocol this build speaks.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 0, minor: 1 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 0, minor: 2 };
 
 impl ProtocolVersion {
     /// Whether a core speaking `self` can serve a UI speaking `ui`.

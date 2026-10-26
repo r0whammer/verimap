@@ -509,6 +509,7 @@ checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 name = "verimap-domain"
 version = "0.1.0"
 dependencies = [
+ "proptest",
  "verimap-kernel",
 ]
 
@@ -533,6 +534,7 @@ dependencies = [
 name = "verimap-sim"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "verimap-domain",
 ]
 

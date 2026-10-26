@@ -1,10 +1,14 @@
-// UI-thread side of the core worker: starts it, negotiates the protocol, and
-// reports what the UI may rely on. Domain decisions stay in the Rust core.
+// UI-thread side of the core worker: starts it, negotiates the protocol,
+// and carries requests and their answers. Domain decisions stay in the Rust
+// core; this module only moves messages and tracks whether the core is
+// usable.
 import { UI_BUILD } from '../build-info.ts';
 import {
   PROTOCOL_VERSION,
   type CoreEvent,
   type ProtocolVersion,
+  type SceneUpdateDto,
+  type SessionDto,
   type SiteDto,
   type UiRequest,
 } from '../generated/protocol.ts';
@@ -17,6 +21,9 @@ export type CoreStatus =
       readonly protocol: ProtocolVersion;
       readonly coreBuild: string;
       readonly site: SiteDto;
+      readonly session: SessionDto;
+      /** The complete scene at the handshake. */
+      readonly initialScene: SceneUpdateDto;
     }
   | {
       readonly state: 'incompatible';
@@ -36,8 +43,14 @@ export interface WorkerPort {
 /** How long the core may take to load and answer `hello`. */
 export const HANDSHAKE_TIMEOUT_MS = 15_000;
 
+/** Events that answer a request (everything but the handshake answers). */
+export type CoreAnswer = Exclude<CoreEvent, { type: 'ready' } | { type: 'incompatible' }>;
+
 const EVENT_TYPES: readonly string[] = [
   'ready',
+  'scene',
+  'entity_detail',
+  'state_hash',
   'incompatible',
   'error',
 ] satisfies readonly CoreEvent['type'][];
@@ -59,11 +72,20 @@ function startCoreWorker(): WorkerPort {
   });
 }
 
+function unavailable(reason: string): CoreAnswer {
+  return { type: 'error', code: 'internal', message: reason };
+}
+
 export class CoreBridge {
   #status: CoreStatus = { state: 'starting' };
   readonly #listeners = new Set<(status: CoreStatus) => void>();
   readonly #worker: WorkerPort;
   readonly #timer: ReturnType<typeof setTimeout>;
+  /** Answers still expected, oldest first. The worker answers every
+   * request exactly once and in order, so the next answer is always for
+   * the oldest pending request. */
+  readonly #pending: ((event: CoreAnswer) => void)[] = [];
+  #helloAnswered = false;
 
   constructor(worker: WorkerPort = startCoreWorker()) {
     this.#worker = worker;
@@ -91,10 +113,24 @@ export class CoreBridge {
     return () => this.#listeners.delete(listener);
   }
 
+  /** Sends `request` and resolves with the core's answer. If the core is
+   * not ready, or stops before answering, resolves with an `internal`
+   * error instead; it never rejects. */
+  request(request: Exclude<UiRequest, { type: 'hello' }>): Promise<CoreAnswer> {
+    if (this.#status.state !== 'ready') {
+      return Promise.resolve(unavailable(`core is ${this.#status.state}`));
+    }
+    return new Promise((resolve) => {
+      this.#pending.push(resolve);
+      this.#worker.postMessage(request);
+    });
+  }
+
   dispose(): void {
     clearTimeout(this.#timer);
     this.#listeners.clear();
     this.#worker.terminate();
+    this.#flush('core stopped');
   }
 
   #receive(data: unknown): void {
@@ -102,19 +138,34 @@ export class CoreBridge {
       this.#fail('core sent an unrecognized event');
       return;
     }
+    if (!this.#helloAnswered) {
+      this.#helloAnswered = true;
+      this.#handshake(data);
+      return;
+    }
+    const resolve = this.#pending.shift();
+    if (!resolve || data.type === 'ready' || data.type === 'incompatible') {
+      this.#fail(`core sent an unexpected ${data.type} event`);
+      return;
+    }
+    resolve(data);
+  }
+
+  #handshake(data: CoreEvent): void {
+    clearTimeout(this.#timer);
     switch (data.type) {
       case 'ready':
-        clearTimeout(this.#timer);
         this.#set({
           state: 'ready',
           protocol: data.protocol,
           coreBuild: data.core_build,
           site: data.site,
+          session: data.session,
+          initialScene: data.scene,
         });
         break;
       case 'incompatible':
         // Stop talking to a core this UI does not understand.
-        clearTimeout(this.#timer);
         this.#worker.terminate();
         this.#set({
           state: 'incompatible',
@@ -123,9 +174,10 @@ export class CoreBridge {
         });
         break;
       case 'error':
-        // The only request so far is `hello`, so any error is fatal.
         this.#fail(`${data.code}: ${data.message}`);
         break;
+      default:
+        this.#fail(`core answered hello with ${data.type}`);
     }
   }
 
@@ -133,6 +185,11 @@ export class CoreBridge {
     clearTimeout(this.#timer);
     this.#worker.terminate();
     this.#set({ state: 'failed', reason });
+    this.#flush(reason);
+  }
+
+  #flush(reason: string): void {
+    for (const resolve of this.#pending.splice(0)) resolve(unavailable(reason));
   }
 
   #set(status: CoreStatus): void {

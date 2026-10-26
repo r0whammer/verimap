@@ -6,7 +6,7 @@
 
 use verimap_kernel::AxisBoundsMm;
 
-use crate::{DomainError, validate_label, validate_slug};
+use crate::{DomainError, ScenePoint, validate_label, validate_slug};
 
 /// A WGS84 geodetic position: the origin of a session's ENU scene frame.
 ///
@@ -114,6 +114,11 @@ impl SceneBounds {
     /// Up axis.
     pub fn z(&self) -> AxisBoundsMm {
         self.z
+    }
+
+    /// Whether `p` lies inside the bounds on every axis (closed intervals).
+    pub fn contains(&self, p: &ScenePoint) -> bool {
+        self.x.contains(p.x_mm()) && self.y.contains(p.y_mm()) && self.z.contains(p.z_mm())
     }
 }
 

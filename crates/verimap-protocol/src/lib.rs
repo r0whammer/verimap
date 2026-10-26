@@ -10,7 +10,10 @@
 #![forbid(unsafe_code)]
 
 pub mod bridge;
+pub mod scene;
 pub mod site;
+mod u64s;
 mod version;
 
+pub use u64s::U64String;
 pub use version::{PROTOCOL_VERSION, ProtocolVersion};

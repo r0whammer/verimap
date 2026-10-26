@@ -1,30 +1,13 @@
-import { expect, test, type Page } from '@playwright/test';
-
-/** Records anything that would break the "no external requests" rule or
- * indicate a runtime fault. External requests are also aborted. */
-async function watch(page: Page) {
-  const external: string[] = [];
-  const errors: string[] = [];
-  await page.context().route('**/*', (route) => {
-    const url = new URL(route.request().url());
-    const local =
-      url.protocol === 'data:' || url.protocol === 'blob:' || url.hostname === '127.0.0.1';
-    if (local) return route.continue();
-    external.push(url.href);
-    return route.abort();
-  });
-  page.on('console', (msg) => {
-    if (msg.type() === 'error') errors.push(msg.text());
-  });
-  page.on('pageerror', (e) => errors.push(e.message));
-  return { external, errors };
-}
+import { expect, test } from '@playwright/test';
+import { PROTOCOL_VERSION } from '../src/generated/protocol.ts';
+import { watch } from './support.ts';
 
 test('core handshake reports the synthetic site', async ({ page }) => {
   const seen = await watch(page);
   await page.goto('/');
   await expect(page.getByTestId('core-status')).toHaveText('Ready', { timeout: 20_000 });
-  await expect(page.getByTestId('protocol')).toHaveText('UI 0.1 · core 0.1');
+  const v = `${PROTOCOL_VERSION.major}.${PROTOCOL_VERSION.minor}`;
+  await expect(page.getByTestId('protocol')).toHaveText(`UI ${v} · core ${v}`);
   await expect(page.getByTestId('site-name')).toHaveText('Synthetic Site Alpha');
   await expect(page.getByRole('region', { name: 'Site' })).toContainText(
     '200 m east × 200 m north',

@@ -1,0 +1,28 @@
+{
+  "checkpoints": [
+    {
+      "last_sequence": 144,
+      "state_hash": "c9d0755700455374",
+      "tick": 100
+    },
+    {
+      "last_sequence": 429,
+      "state_hash": "445c9821cc99a621",
+      "tick": 300
+    },
+    {
+      "last_sequence": 818,
+      "state_hash": "fdb6af50bd549a0b",
+      "tick": 600
+    },
+    {
+      "last_sequence": 2218,
+      "state_hash": "4ab630ad1c9b69a2",
+      "tick": 1600
+    }
+  ],
+  "description": "Native state hashes of the demo session; see crates/verimap-sim/tests/replay.rs",
+  "scene_version": 2,
+  "seed": 1,
+  "simulator_version": 1
+}

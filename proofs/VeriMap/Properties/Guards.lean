@@ -82,14 +82,16 @@ theorem coord_in_range_spec (v : I64) :
 
 /-- `AxisBoundsMm.new` returns normally on every input. It accepts exactly the
 valid intervals and keeps both ends unchanged; otherwise it reports
-`CoordinateOutOfRange` when an end is out of range, else `BoundsInverted`. -/
+`CoordinateOutOfRange` when an end is out of range, else `BoundsInverted`;
+never another error. -/
 theorem AxisBoundsMm.new_spec (lo hi : I64) :
     AxisBoundsMm.new lo hi ⦃ r => match r with
       | .Ok b => ValidAxisBounds lo.val hi.val ∧ b.min = lo ∧ b.max = hi
       | .Err .CoordinateOutOfRange => ¬ (CoordInRange lo.val ∧ CoordInRange hi.val)
       | .Err .BoundsInverted =>
           CoordInRange lo.val ∧ CoordInRange hi.val ∧ hi.val < lo.val
-      | .Err .ConfidenceOutOfRange => False ⦄ := by
+      | .Err .ConfidenceOutOfRange => False
+      | .Err .SequenceExhausted => False ⦄ := by
   unfold AxisBoundsMm.new
   step*
   all_goals simp_all [ValidAxisBounds]

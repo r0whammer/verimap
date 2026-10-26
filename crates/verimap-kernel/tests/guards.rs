@@ -24,6 +24,7 @@ fn bounds(min: i64, max: i64) -> Result<(i64, i64), &'static str> {
         Err(KernelError::CoordinateOutOfRange) => Err("range"),
         Err(KernelError::BoundsInverted) => Err("inverted"),
         Err(KernelError::ConfidenceOutOfRange) => Err("confidence"),
+        Err(KernelError::SequenceExhausted) => Err("sequence"),
     }
 }
 
