@@ -20,6 +20,18 @@ records what works. [`CLAUDE.md`](CLAUDE.md) is the specification, not a list
 of features. [`docs/verification.md`](docs/verification.md) lists exactly
 what has been proved and what each proof assumes.
 
+<p>
+  <img src="docs/images/demo-desktop.png" width="620" alt="VeriMap in a desktop browser: a 3D view of the synthetic site with a selected vehicle track, an operator marker labelled Gate A, and the playback timeline; the sidebar shows the track's status, confidence, position, 1σ uncertainty, source, and observation history.">
+  <img src="docs/images/demo-phone.png" width="190" alt="VeriMap at phone size: the same 3D scene above the playback timeline, with the track details in a bottom sheet.">
+</p>
+
+The bundled synthetic site after about 30 s of simulated scene time. The
+`trk:1` vehicle track is selected, showing its confidence, 1σ uncertainty,
+provenance, and observation history, with an operator marker beside it.
+All data is simulated. Both images come from the production build in
+headless Chromium with software WebGL. The phone image uses Chromium's
+Pixel 7 emulation, not a real device.
+
 ## Requirements
 
 - Linux (NixOS or another distribution) or Linux under WSL2. No other

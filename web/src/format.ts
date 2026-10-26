@@ -11,6 +11,12 @@ export function metres1(mm: number): string {
   return `${(mm / 1000).toFixed(1)} m`;
 }
 
+/** A number with one decimal and no unit, for tables whose header names
+ * the unit, e.g. `-12.3`. */
+export function decimal1(value: number): string {
+  return value.toFixed(1);
+}
+
 /** Degrees with 6 decimals (about 0.1 m), e.g. `-98.350000°`. */
 export function degrees(deg: number): string {
   return `${deg.toFixed(6)}°`;

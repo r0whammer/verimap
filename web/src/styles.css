@@ -372,10 +372,18 @@ table.history {
 
 table.history th,
 table.history td {
-  padding: 3px 6px;
+  padding: 3px 4px;
   text-align: left;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
+}
+
+table.history :is(th, td):first-child {
+  padding-left: 0;
+}
+
+table.history :is(th, td):last-child {
+  padding-right: 0;
 }
 
 table.history th {

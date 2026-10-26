@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { metres1, percent, sceneTime } from '../format.ts';
+import { decimal1, metres1, percent, sceneTime } from '../format.ts';
 import type {
   AnnotationDto,
   EntityDetailDto,
@@ -95,9 +95,9 @@ export function EntityDetails({
             <thead>
               <tr>
                 <th scope="col">Acquired</th>
-                <th scope="col">Position (E, N)</th>
-                <th scope="col">1σ</th>
-                <th scope="col">Conf.</th>
+                <th scope="col">E, N (m)</th>
+                <th scope="col">1σ (m)</th>
+                <th scope="col">Conf. (%)</th>
                 <th scope="col">Obs.</th>
               </tr>
             </thead>
@@ -106,10 +106,10 @@ export function EntityDetails({
                 <tr key={h.revision}>
                   <td>{tick(h.acquired_tick)}</td>
                   <td>
-                    {metres1(h.position.x_mm)}, {metres1(h.position.y_mm)}
+                    {decimal1(h.position.x_mm / 1000)}, {decimal1(h.position.y_mm / 1000)}
                   </td>
-                  <td>{metres1(h.sigma_mm)}</td>
-                  <td>{percent(h.confidence_bp)}</td>
+                  <td>{decimal1(h.sigma_mm / 1000)}</td>
+                  <td>{decimal1(h.confidence_bp / 100)}</td>
                   <td className="mono">#{h.source.sequence}</td>
                 </tr>
               ))}
