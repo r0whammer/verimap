@@ -30,6 +30,15 @@ pub enum ObservationPayload {
         /// Detector confidence, basis points.
         confidence_bp: u16,
     },
+    /// Platform pose in `frame_id`. This prototype treats the pose as known
+    /// (no SLAM): the source reports it, and the estimator does not solve
+    /// for it.
+    Pose {
+        /// Position in `frame_id`, metres.
+        position_m: [f64; 3],
+        /// Horizontal 1σ uncertainty, metres.
+        sigma_m: f64,
+    },
 }
 
 /// One observation as it arrives from a source.
@@ -69,6 +78,29 @@ pub struct SourceRegistration {
     pub frame_id: String,
     /// Expected transform version of that frame.
     pub transform_version: u32,
+}
+
+/// A validated platform pose. It is not a track and is not journaled as
+/// scene state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlatformPose {
+    /// Where it came from.
+    pub source: ObservationRef,
+    /// Acquisition scene tick.
+    pub acquired_tick: u64,
+    /// Quantized position.
+    pub position: ScenePoint,
+    /// Reported 1σ.
+    pub uncertainty: Uncertainty,
+}
+
+/// What [`Normalizer::normalize`] accepts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AcceptedObservation {
+    /// An object detection.
+    Detection(Detection),
+    /// A platform pose.
+    Pose(PlatformPose),
 }
 
 /// A validated detection, ready for association.
@@ -168,7 +200,10 @@ impl Normalizer {
 
     /// Validates `env` completely; only an accepted observation updates
     /// duplicate detection.
-    pub fn normalize(&mut self, env: &ObservationEnvelope) -> Result<Detection, ObservationError> {
+    pub fn normalize(
+        &mut self,
+        env: &ObservationEnvelope,
+    ) -> Result<AcceptedObservation, ObservationError> {
         let id = SourceId::new("source_id", &env.source_id)?;
         let state = self
             .sources
@@ -197,28 +232,41 @@ impl Normalizer {
         if highest.is_some_and(|h| env.sequence < h.saturating_sub(Self::DEDUP_WINDOW)) {
             return Err(ObservationError::OutsideWindow);
         }
-        let ObservationPayload::Detection {
-            class,
-            position_m: [x, y, z],
-            sigma_m,
-            confidence_bp,
-        } = env.payload;
-        let position = ScenePoint::from_metres(x, y, z)?;
-        if !self.bounds.contains(&position) {
-            return Err(DomainError::OutsideSite { field: "position" }.into());
-        }
-        let sigma_mm = metres_to_mm("sigma", sigma_m)?;
-        let uncertainty =
-            Uncertainty::new(
-                u32::try_from(sigma_mm).map_err(|_| DomainError::OutOfRange {
-                    field: "uncertainty.sigma",
-                })?,
-            )?;
-        let fix = TrackFix {
-            acquired_tick: env.acquired_tick,
-            position,
-            uncertainty,
-            confidence: Confidence::new(confidence_bp)?,
+        let source = ObservationRef {
+            source: id,
+            sequence: env.sequence,
+        };
+        let accepted = match env.payload {
+            ObservationPayload::Detection {
+                class,
+                position_m: [x, y, z],
+                sigma_m,
+                confidence_bp,
+            } => {
+                let (position, uncertainty) = measured_point(&self.bounds, [x, y, z], sigma_m)?;
+                AcceptedObservation::Detection(Detection {
+                    source,
+                    class,
+                    fix: TrackFix {
+                        acquired_tick: env.acquired_tick,
+                        position,
+                        uncertainty,
+                        confidence: Confidence::new(confidence_bp)?,
+                    },
+                })
+            }
+            ObservationPayload::Pose {
+                position_m: [x, y, z],
+                sigma_m,
+            } => {
+                let (position, uncertainty) = measured_point(&self.bounds, [x, y, z], sigma_m)?;
+                AcceptedObservation::Pose(PlatformPose {
+                    source,
+                    acquired_tick: env.acquired_tick,
+                    position,
+                    uncertainty,
+                })
+            }
         };
         state.recent.insert(env.sequence);
         // The insert above leaves the set non-empty.
@@ -230,15 +278,28 @@ impl Normalizer {
             .expect("the sequence was just inserted");
         let floor = h.saturating_sub(Self::DEDUP_WINDOW);
         state.recent = state.recent.split_off(&floor);
-        Ok(Detection {
-            source: ObservationRef {
-                source: id,
-                sequence: env.sequence,
-            },
-            class,
-            fix,
-        })
+        Ok(accepted)
     }
+}
+
+fn measured_point(
+    bounds: &SceneBounds,
+    position_m: [f64; 3],
+    sigma_m: f64,
+) -> Result<(ScenePoint, Uncertainty), ObservationError> {
+    let [x, y, z] = position_m;
+    let position = ScenePoint::from_metres(x, y, z)?;
+    if !bounds.contains(&position) {
+        return Err(DomainError::OutsideSite { field: "position" }.into());
+    }
+    let sigma_mm = metres_to_mm("sigma", sigma_m)?;
+    let uncertainty =
+        Uncertainty::new(
+            u32::try_from(sigma_mm).map_err(|_| DomainError::OutOfRange {
+                field: "uncertainty.sigma",
+            })?,
+        )?;
+    Ok((position, uncertainty))
 }
 
 #[cfg(test)]
@@ -285,14 +346,20 @@ mod tests {
             sigma_m,
             confidence_bp,
             ..
-        } = &mut env.payload;
+        } = &mut env.payload
+        else {
+            panic!("envelope is a detection");
+        };
         f(position_m, sigma_m, confidence_bp);
         env
     }
 
     #[test]
     fn accepts_and_quantizes() {
-        let d = normalizer().normalize(&envelope(1)).unwrap();
+        let AcceptedObservation::Detection(d) = normalizer().normalize(&envelope(1)).unwrap()
+        else {
+            panic!("expected a detection");
+        };
         assert_eq!(d.fix.position, ScenePoint::new(1_000, -2_000, 250).unwrap());
         assert_eq!(d.fix.uncertainty.sigma_mm(), 1_500);
         assert_eq!(d.source.sequence, 1);
@@ -379,6 +446,37 @@ mod tests {
             Err(ObservationError::OutsideWindow)
         );
         assert!(n.normalize(&envelope(10)).is_ok());
+    }
+
+    #[test]
+    fn pose_uses_the_same_checks_as_a_detection() {
+        let mut env = envelope(4);
+        env.payload = ObservationPayload::Pose {
+            position_m: [1.0, -2.0, 0.25],
+            sigma_m: 0.4,
+        };
+        let AcceptedObservation::Pose(pose) = normalizer().normalize(&env).unwrap() else {
+            panic!("expected a pose");
+        };
+        assert_eq!(pose.position, ScenePoint::new(1_000, -2_000, 250).unwrap());
+        assert_eq!(pose.uncertainty.sigma_mm(), 400);
+        assert_eq!(pose.acquired_tick, 10);
+        env.payload = ObservationPayload::Pose {
+            position_m: [1.0, -2.0, 0.25],
+            sigma_m: f64::NAN,
+        };
+        assert!(matches!(
+            normalizer().normalize(&env),
+            Err(ObservationError::Invalid(_))
+        ));
+        env.payload = ObservationPayload::Pose {
+            position_m: [80.0, 0.0, 0.0],
+            sigma_m: 1.0,
+        };
+        assert!(matches!(
+            normalizer().normalize(&env),
+            Err(ObservationError::Invalid(_))
+        ));
     }
 
     #[test]

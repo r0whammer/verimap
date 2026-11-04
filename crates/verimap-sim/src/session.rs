@@ -3,12 +3,13 @@
 //! this code.
 
 use verimap_domain::{
-    Association, Authority, Changes, Command, CommandError, DomainError, Normalizer,
-    ObservationEnvelope, ObservationError, SCENE_FRAME_ID, SourceId, SourceRegistration,
-    TrackTarget, TrackerConfig, associate,
+    AcceptedObservation, Association, Authority, Changes, Command, CommandError, DomainError,
+    Normalizer, ObservationEnvelope, ObservationError, PlatformPose, SCENE_FRAME_ID, SourceHealth,
+    SourceId, SourceRegistration, TrackTarget, TrackerConfig, associate,
 };
 
 use crate::Simulator;
+use crate::pose::POSE_SOURCE_ID;
 use crate::sensor::{DETECTOR_SOURCE_ID, SCENE_CLOCK_DOMAIN};
 
 /// What happened to the observations this session received.
@@ -24,6 +25,8 @@ pub struct IngestStats {
     pub duplicates: u64,
     /// Older than the matched track's latest fix; kept out of state.
     pub late: u64,
+    /// Accepted platform poses. They are not scene events.
+    pub poses: u64,
 }
 
 /// The result of [`LocalSession::advance`].
@@ -54,11 +57,15 @@ pub struct LocalSession {
     tracker: TrackerConfig,
     authority: Authority,
     stats: IngestStats,
+    /// Accepted poses, oldest first, capped so a long run stays bounded.
+    poses: Vec<PlatformPose>,
 }
 
 impl LocalSession {
     /// Scene epoch of a new local session.
     pub const EPOCH: u32 = 1;
+    /// Retained accepted poses. Older ones are dropped.
+    const POSE_LOG_LIMIT: usize = 128;
 
     /// A session of the demo scenario with `seed` and the default journal
     /// bound.
@@ -77,6 +84,13 @@ impl LocalSession {
             frame_id: SCENE_FRAME_ID.into(),
             transform_version: 1,
         });
+        normalizer.register(SourceRegistration {
+            id: SourceId::new("source_id", POSE_SOURCE_ID)?,
+            session: 1,
+            clock_domain: SCENE_CLOCK_DOMAIN.into(),
+            frame_id: SCENE_FRAME_ID.into(),
+            transform_version: 1,
+        });
         Ok(Self {
             seed,
             sim: Simulator::new(seed),
@@ -84,6 +98,7 @@ impl LocalSession {
             tracker: TrackerConfig::default(),
             authority: Authority::new(site, Self::EPOCH, journal_limit),
             stats: IngestStats::default(),
+            poses: Vec::new(),
         })
     }
 
@@ -107,6 +122,16 @@ impl LocalSession {
     /// Observation counts so far.
     pub fn stats(&self) -> IngestStats {
         self.stats
+    }
+
+    /// Accepted platform poses still retained, oldest first.
+    pub fn poses(&self) -> &[PlatformPose] {
+        &self.poses
+    }
+
+    /// Health of the simulated pose adapter.
+    pub fn pose_health(&self) -> SourceHealth {
+        self.sim.pose_health()
     }
 
     /// Advances the simulation by `ticks` scene ticks. Each tick commits a
@@ -154,8 +179,16 @@ impl LocalSession {
 
     fn ingest(&mut self, envelope: &ObservationEnvelope) -> Result<Changes, CommandError> {
         self.stats.received += 1;
-        let detection = match self.normalizer.normalize(envelope) {
-            Ok(d) => d,
+        let accepted = match self.normalizer.normalize(envelope) {
+            Ok(AcceptedObservation::Pose(pose)) => {
+                // A pose is not scene state. Keep a bounded log for inspection.
+                self.stats.poses += 1;
+                self.poses.push(pose);
+                let overflow = self.poses.len().saturating_sub(Self::POSE_LOG_LIMIT);
+                self.poses.drain(..overflow);
+                return Ok(Changes::default());
+            }
+            Ok(AcceptedObservation::Detection(d)) => d,
             Err(ObservationError::Duplicate) => {
                 self.stats.duplicates += 1;
                 return Ok(Changes::default());
@@ -165,6 +198,7 @@ impl LocalSession {
                 return Ok(Changes::default());
             }
         };
+        let detection = accepted;
         let target = match associate(&self.tracker, self.authority.store(), &detection) {
             Association::Late(_) => {
                 self.stats.late += 1;
@@ -238,6 +272,32 @@ mod tests {
         assert!(s.ingest(&future).unwrap().is_empty());
         assert_eq!(s.stats().rejected, 2);
         assert_eq!(s.authority().store().entity_record_count(), 1);
+    }
+
+    #[test]
+    fn poses_have_gaps_and_do_not_enter_the_journal() {
+        let mut batched = LocalSession::new(1).unwrap();
+        batched.advance(200);
+        let mut stepped = LocalSession::new(1).unwrap();
+        for _ in 0..200 {
+            stepped.advance(1);
+        }
+        assert_eq!(batched.authority().journal(), stepped.authority().journal());
+        assert_eq!(batched.poses(), stepped.poses());
+        assert_eq!(batched.poses().len(), LocalSession::POSE_LOG_LIMIT);
+        let acquired: Vec<u64> = batched.poses().iter().map(|p| p.acquired_tick).collect();
+        assert!(acquired.iter().all(|tick| !tick.is_multiple_of(5)));
+        assert!(batched.authority().journal().iter().all(|event| {
+            matches!(
+                event.payload,
+                verimap_domain::EventPayload::ClockAdvanced { .. }
+                    | verimap_domain::EventPayload::EntityObserved { .. }
+            )
+        }));
+        assert_eq!(
+            batched.pose_health(),
+            verimap_domain::SourceHealth::Degraded
+        );
     }
 
     #[test]

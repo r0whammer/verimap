@@ -17,6 +17,7 @@
 
 #![forbid(unsafe_code)]
 
+mod adapter;
 mod annotation;
 mod authority;
 mod canonical;
@@ -32,6 +33,7 @@ mod store;
 mod text;
 mod tracker;
 
+pub use adapter::{ADAPTER_INTERFACE_VERSION, AdapterPhase, SourceCapabilities, SourceHealth};
 pub use annotation::{Annotation, Placement};
 pub use authority::{
     Authority, Command, CommandError, OPERATOR_NAMESPACE, TRACK_NAMESPACE, TrackTarget, replay,
@@ -46,8 +48,8 @@ pub use error::DomainError;
 pub use event::{CommittedEvent, EVENT_SCHEMA_VERSION, EventPayload, Provenance};
 pub use ids::{ObjectId, SourceId};
 pub use observation::{
-    Detection, Normalizer, ObservationEnvelope, ObservationError, ObservationPayload,
-    SCENE_FRAME_ID, SourceRegistration,
+    AcceptedObservation, Detection, Normalizer, ObservationEnvelope, ObservationError,
+    ObservationPayload, PlatformPose, SCENE_FRAME_ID, SourceRegistration,
 };
 pub use point::{ScenePoint, metres_to_mm};
 pub use site::{GeodeticAnchor, SceneBounds, SiteFrame, SiteId};
