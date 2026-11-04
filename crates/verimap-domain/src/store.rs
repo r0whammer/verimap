@@ -8,7 +8,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use verimap_kernel::{Decision, Slot, next_sequence, slot_delete, slot_upsert};
 
 use crate::{
-    Annotation, CommittedEvent, Entity, EventPayload, ObjectId, Provenance, ScenePoint, SiteFrame,
+    Annotation, ChunkId, CommittedEvent, Entity, EventPayload, ObjectId, Provenance, ScenePoint,
+    SiteFrame, SurfaceChunk,
 };
 
 /// One object's state within an epoch: live with its value, or a tombstone.
@@ -124,6 +125,18 @@ pub enum ApplyError {
         /// Why.
         refusal: Refusal,
     },
+    /// The kernel's revision rules refused a chunk write.
+    ChunkRefused {
+        /// Chunk id.
+        id: ChunkId,
+        /// Why.
+        refusal: Refusal,
+    },
+    /// The chunk footprint misses the site.
+    ChunkOutsideSite {
+        /// Chunk id.
+        id: ChunkId,
+    },
 }
 
 impl core::fmt::Display for ApplyError {
@@ -161,6 +174,17 @@ impl core::fmt::Display for ApplyError {
             }
             Self::OutsideSite { id } => write!(f, "{id}: position outside the site bounds"),
             Self::Refused { id, refusal } => write!(f, "{id}: write refused ({refusal:?})"),
+            Self::ChunkRefused { id, refusal } => {
+                write!(
+                    f,
+                    "chunk {},{}: write refused ({refusal:?})",
+                    id.ix(),
+                    id.iy()
+                )
+            }
+            Self::ChunkOutsideSite { id } => {
+                write!(f, "chunk {},{}: outside the site", id.ix(), id.iy())
+            }
         }
     }
 }
@@ -177,6 +201,8 @@ pub struct Changes {
     pub entities: BTreeSet<ObjectId>,
     /// Annotations created, updated, or deleted.
     pub annotations: BTreeSet<ObjectId>,
+    /// Chunks created, updated, or deleted.
+    pub chunks: BTreeSet<ChunkId>,
 }
 
 impl Changes {
@@ -185,11 +211,15 @@ impl Changes {
         self.clock |= other.clock;
         self.entities.extend(other.entities);
         self.annotations.extend(other.annotations);
+        self.chunks.extend(other.chunks);
     }
 
     /// Nothing changed.
     pub fn is_empty(&self) -> bool {
-        !self.clock && self.entities.is_empty() && self.annotations.is_empty()
+        !self.clock
+            && self.entities.is_empty()
+            && self.annotations.is_empty()
+            && self.chunks.is_empty()
     }
 }
 
@@ -203,6 +233,7 @@ pub struct SceneStore {
     tick: u64,
     entities: Records<Entity>,
     annotations: Records<Annotation>,
+    chunks: BTreeMap<ChunkId, Record<SurfaceChunk>>,
 }
 
 /// A validated change, ready to commit.
@@ -219,6 +250,10 @@ enum Plan {
         id: ObjectId,
         record: Record<Annotation>,
     },
+    Chunk {
+        id: ChunkId,
+        record: Record<SurfaceChunk>,
+    },
 }
 
 impl SceneStore {
@@ -231,6 +266,7 @@ impl SceneStore {
             tick: 0,
             entities: BTreeMap::new(),
             annotations: BTreeMap::new(),
+            chunks: BTreeMap::new(),
         }
     }
 
@@ -299,6 +335,25 @@ impl SceneStore {
         (&self.entities, &self.annotations)
     }
 
+    /// Live chunks, in id order.
+    pub fn chunks(&self) -> impl Iterator<Item = (u64, &SurfaceChunk)> {
+        self.chunks.values().filter_map(Record::live)
+    }
+
+    /// A live chunk and its revision.
+    pub fn chunk(&self, id: &ChunkId) -> Option<(u64, &SurfaceChunk)> {
+        self.chunks.get(id).and_then(Record::live)
+    }
+
+    /// The kernel slot of a chunk id.
+    pub fn chunk_slot(&self, id: &ChunkId) -> Slot {
+        Record::slot(self.chunks.get(id))
+    }
+
+    pub(crate) fn chunk_records(&self) -> &BTreeMap<ChunkId, Record<SurfaceChunk>> {
+        &self.chunks
+    }
+
     /// Applies one committed event, or changes nothing and says why.
     ///
     /// The event must be the next in sequence for this epoch. Every check
@@ -320,6 +375,10 @@ impl SceneStore {
             Plan::Annotation { id, record } => {
                 changes.annotations.insert(id.clone());
                 self.annotations.insert(id, record);
+            }
+            Plan::Chunk { id, record } => {
+                changes.chunks.insert(id);
+                self.chunks.insert(id, record);
             }
         }
         self.last_sequence = event.sequence;
@@ -422,6 +481,38 @@ impl SceneStore {
                     },
                 })
             }
+            (
+                EventPayload::ChunkReplaced { chunk },
+                Provenance::Operator | Provenance::Observation(_),
+            ) => {
+                self.check_time(event, self.tick)?;
+                if !chunk.id().intersects_xy(self.site.bounds()) {
+                    return Err(ApplyError::ChunkOutsideSite { id: chunk.id() });
+                }
+                let id = chunk.id();
+                let current = self.chunks.get(&id);
+                let same_content = current
+                    .and_then(Record::live)
+                    .is_some_and(|(_, stored)| stored == chunk);
+                let t = slot_upsert(Record::slot(current), seq, same_content);
+                let revision = applied_chunk(&id, t.decision, t.slot)?;
+                Ok(Plan::Chunk {
+                    id,
+                    record: Record::Live {
+                        revision,
+                        value: chunk.clone(),
+                    },
+                })
+            }
+            (EventPayload::ChunkDeleted { id }, Provenance::Operator) => {
+                self.check_time(event, self.tick)?;
+                let t = slot_delete(Record::slot(self.chunks.get(id)), seq);
+                let revision = deleted_chunk(id, t.decision, t.slot)?;
+                Ok(Plan::Chunk {
+                    id: *id,
+                    record: Record::Deleted { revision },
+                })
+            }
             (EventPayload::AnnotationDeleted { id }, Provenance::Operator) => {
                 self.check_time(event, self.tick)?;
                 let t = slot_delete(Record::slot(self.annotations.get(id)), seq);
@@ -469,6 +560,32 @@ fn deleted(id: &ObjectId, decision: Decision, slot: Slot) -> Result<u64, ApplyEr
     }
 }
 
+fn applied_chunk(id: &ChunkId, decision: Decision, slot: Slot) -> Result<u64, ApplyError> {
+    match (decision, slot) {
+        (Decision::Apply, Slot::Live { revision }) => Ok(revision),
+        (decision, _) => Err(chunk_refused(id, decision)),
+    }
+}
+
+fn deleted_chunk(id: &ChunkId, decision: Decision, slot: Slot) -> Result<u64, ApplyError> {
+    match (decision, slot) {
+        (Decision::Apply, Slot::Deleted { revision }) => Ok(revision),
+        (decision, _) => Err(chunk_refused(id, decision)),
+    }
+}
+
+fn chunk_refused(id: &ChunkId, decision: Decision) -> ApplyError {
+    let refusal = match decision {
+        Decision::Duplicate => Refusal::Duplicate,
+        Decision::Stale => Refusal::Stale,
+        Decision::Conflict => Refusal::Conflict,
+        Decision::Tombstoned => Refusal::Tombstoned,
+        Decision::Missing => Refusal::Missing,
+        Decision::Apply => Refusal::Conflict,
+    };
+    ApplyError::ChunkRefused { id: *id, refusal }
+}
+
 fn refused(id: &ObjectId, decision: Decision) -> ApplyError {
     let refusal = match decision {
         Decision::Duplicate => Refusal::Duplicate,
@@ -498,9 +615,9 @@ pub(crate) mod tests {
 
     use super::*;
     use crate::{
-        Annotation, Confidence, Entity, EntityClass, EventPayload, GeodeticAnchor, ObjectId,
-        ObservationRef, Placement, Provenance, SceneBounds, ScenePoint, SiteFrame, SiteId,
-        SourceId, TrackFix, Uncertainty,
+        Annotation, CELL_COUNT, Cell, ChunkId, Confidence, Entity, EntityClass, EventPayload,
+        GeodeticAnchor, ObjectId, ObservationRef, Placement, Provenance, SCENE_FRAME, SceneBounds,
+        ScenePoint, SiteFrame, SiteId, SourceId, SurfaceChunk, TrackFix, Uncertainty,
     };
     use verimap_kernel::Decision;
 
@@ -708,6 +825,7 @@ pub(crate) mod tests {
             clock: true,
             entities: BTreeSet::from([id("trk:1")]),
             annotations: BTreeSet::from([id("op:1")]),
+            chunks: BTreeSet::new(),
         });
         assert!(!c.is_empty());
         let samples = [
@@ -735,9 +853,122 @@ pub(crate) mod tests {
                 id: id("trk:1"),
                 refusal: Refusal::Tombstoned,
             },
+            ApplyError::ChunkRefused {
+                id: crate::ChunkId::new(1, -1).unwrap(),
+                refusal: Refusal::Stale,
+            },
+            ApplyError::ChunkOutsideSite {
+                id: crate::ChunkId::new(1, -1).unwrap(),
+            },
         ];
         for e in samples {
             assert!(!e.to_string().is_empty(), "{e:?}");
         }
+    }
+
+    fn blank_chunk(ix: i32, iy: i32) -> SurfaceChunk {
+        SurfaceChunk::from_cells(
+            ChunkId::new(ix, iy).unwrap(),
+            SCENE_FRAME,
+            &vec![Cell::unknown(); CELL_COUNT],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn chunk_writes_follow_the_same_revision_rules() {
+        let mut store = SceneStore::new(site(), 1);
+        let id = ChunkId::new(0, 0).unwrap();
+        let chunk = blank_chunk(0, 0);
+        store.chunks.insert(
+            id,
+            Record::Live {
+                revision: 1,
+                value: chunk.clone(),
+            },
+        );
+        let duplicate = CommittedEvent {
+            epoch: 1,
+            sequence: 1,
+            tick: 0,
+            provenance: Provenance::Operator,
+            payload: EventPayload::ChunkReplaced {
+                chunk: chunk.clone(),
+            },
+        };
+        assert_eq!(
+            store.apply(&duplicate),
+            Err(ApplyError::ChunkRefused {
+                id,
+                refusal: Refusal::Duplicate,
+            })
+        );
+        let mut cells = vec![Cell::unknown(); CELL_COUNT];
+        cells[0] = Cell::observed(10, 1).unwrap();
+        let other = SurfaceChunk::from_cells(id, SCENE_FRAME, &cells).unwrap();
+        let conflict = CommittedEvent {
+            payload: EventPayload::ChunkReplaced { chunk: other },
+            ..duplicate.clone()
+        };
+        assert_eq!(
+            store.apply(&conflict),
+            Err(ApplyError::ChunkRefused {
+                id,
+                refusal: Refusal::Conflict,
+            })
+        );
+        store.chunks.insert(
+            ChunkId::new(1, 0).unwrap(),
+            Record::Live {
+                revision: 9,
+                value: blank_chunk(1, 0),
+            },
+        );
+        let stale = CommittedEvent {
+            payload: EventPayload::ChunkReplaced {
+                chunk: blank_chunk(1, 0),
+            },
+            ..duplicate.clone()
+        };
+        assert_eq!(
+            store.apply(&stale),
+            Err(ApplyError::ChunkRefused {
+                id: ChunkId::new(1, 0).unwrap(),
+                refusal: Refusal::Stale,
+            })
+        );
+        let missing = CommittedEvent {
+            payload: EventPayload::ChunkDeleted {
+                id: ChunkId::new(-1, 0).unwrap(),
+            },
+            ..duplicate.clone()
+        };
+        assert_eq!(
+            store.apply(&missing),
+            Err(ApplyError::ChunkRefused {
+                id: ChunkId::new(-1, 0).unwrap(),
+                refusal: Refusal::Missing,
+            })
+        );
+        let outside = CommittedEvent {
+            payload: EventPayload::ChunkReplaced {
+                chunk: blank_chunk(20, 0),
+            },
+            ..duplicate
+        };
+        assert_eq!(
+            store.apply(&outside),
+            Err(ApplyError::ChunkOutsideSite {
+                id: ChunkId::new(20, 0).unwrap(),
+            })
+        );
+        assert_eq!(
+            chunk_refused(&id, Decision::Apply),
+            ApplyError::ChunkRefused {
+                id,
+                refusal: Refusal::Conflict,
+            }
+        );
+        assert_eq!(store.last_sequence(), 0);
     }
 }

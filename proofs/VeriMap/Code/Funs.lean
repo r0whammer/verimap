@@ -290,8 +290,108 @@ def slot_delete (slot : Slot) (revision : Std.U64) : Result Transition := do
       then ok { decision := Decision.Duplicate, slot }
       else ok { decision := Decision.Tombstoned, slot }
 
+/-- [verimap_kernel::CELL_SIZE_MM]
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 290:0-290:36
+    Visibility: public -/
+@[global_simps, irreducible] def CELL_SIZE_MM : Std.I64 := 1000#i64
+
+/-- [verimap_kernel::CELLS_PER_CHUNK]
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 293:0-293:36
+    Visibility: public -/
+@[global_simps, irreducible] def CELLS_PER_CHUNK : Std.I64 := 32#i64
+
+/-- [verimap_kernel::floor_div_const]:
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 354:0-358:1 -/
+def floor_div_const (n : Std.I64) (d : Std.I64) : Result Std.I64 := do
+  let q ← n / d
+  let r ← n % d
+  if r != 0#i64
+  then if n < 0#i64
+       then q - 1#i64
+       else ok q
+  else ok q
+
+/-- [verimap_kernel::cell_index]:
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 300:0-305:1
+    Visibility: public -/
+def cell_index
+  (coord_mm : Std.I64) : Result (core.result.Result Std.I64 KernelError) := do
+  let b ← coord_in_range coord_mm
+  if b
+  then
+    let i ← floor_div_const coord_mm CELL_SIZE_MM
+    ok (core.result.Result.Ok i)
+  else ok (core.result.Result.Err KernelError.CoordinateOutOfRange)
+
+/-- [verimap_kernel::{impl core::clone::Clone for verimap_kernel::ChunkCell}::clone]:
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 309:9-309:14
+    Visibility: public -/
+def ChunkCell.Insts.CoreCloneClone.clone
+  (self : ChunkCell) : Result ChunkCell := do
+  ok self
+
+/-- Trait implementation: [verimap_kernel::{impl core::clone::Clone for verimap_kernel::ChunkCell}]
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 309:9-309:14 -/
+@[reducible]
+def ChunkCell.Insts.CoreCloneClone : core.clone.Clone ChunkCell := {
+  clone := ChunkCell.Insts.CoreCloneClone.clone
+}
+
+/-- Trait implementation: [verimap_kernel::{impl core::marker::Copy for verimap_kernel::ChunkCell}]
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 309:16-309:20 -/
+@[reducible]
+def ChunkCell.Insts.CoreMarkerCopy : core.marker.Copy ChunkCell := {
+  cloneInst := ChunkCell.Insts.CoreCloneClone
+}
+
+/-- [verimap_kernel::{verimap_kernel::ChunkCell}::chunk]:
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 317:4-319:5
+    Visibility: public -/
+def ChunkCell.impl.chunk (self : ChunkCell) : Result Std.I64 := do
+  ok self.chunk
+
+/-- [verimap_kernel::{verimap_kernel::ChunkCell}::local]:
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 322:4-324:5
+    Visibility: public -/
+def ChunkCell.impl.local (self : ChunkCell) : Result Std.I64 := do
+  ok self.local
+
+/-- [verimap_kernel::CELL_INDEX_MIN]
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 329:0-329:60
+    Visibility: public -/
+@[global_simps, irreducible]
+def CELL_INDEX_MIN : Result Std.I64 := COORD_MIN_MM / CELL_SIZE_MM
+
+/-- [verimap_kernel::CELL_INDEX_MAX]
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 332:0-332:60
+    Visibility: public -/
+@[global_simps, irreducible]
+def CELL_INDEX_MAX : Result Std.I64 := COORD_MAX_MM / CELL_SIZE_MM
+
+/-- [verimap_kernel::chunk_cell]:
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 337:0-351:1
+    Visibility: public -/
+def chunk_cell
+  (cell : Std.I64) : Result (core.result.Result ChunkCell KernelError) := do
+  let i ← CELL_INDEX_MIN
+  if cell < i
+  then ok (core.result.Result.Err KernelError.CoordinateOutOfRange)
+  else
+    let i1 ← CELL_INDEX_MAX
+    if cell > i1
+    then ok (core.result.Result.Err KernelError.CoordinateOutOfRange)
+    else
+      let q ← cell / CELLS_PER_CHUNK
+      let r ← cell % CELLS_PER_CHUNK
+      if r < 0#i64
+      then
+        let i2 ← q - 1#i64
+        let i3 ← r + CELLS_PER_CHUNK
+        ok (core.result.Result.Ok { chunk := i2, «local» := i3 })
+      else ok (core.result.Result.Ok { chunk := q, «local» := r })
+
 /-- [verimap_kernel::base_revision_matches]:
-    Source: 'crates/verimap-kernel/src/lib.rs', lines 292:0-297:1
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 363:0-368:1
     Visibility: public -/
 def base_revision_matches
   (slot : Slot) (base_revision : Std.U64) : Result Bool := do

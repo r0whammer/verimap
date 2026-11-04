@@ -70,7 +70,7 @@ normalization and tracking → command → journal → Rust scene state → Cesi
 | Web: select a track from a searchable list or by clicking/tapping the map; details with confidence, 1σ uncertainty, freshness, provenance, history | done, e2e tested | `ObjectList.tsx`, `SelectionDetails.tsx`, `CesiumMap.ts` |
 | Web: add, rename, move, delete a marker; placement shows a preview and needs Confirm; height is labelled as the ground plane | done, e2e tested | `PlacementBar.tsx`, `App.tsx` |
 | Review is read-only and leaves the live session unchanged | done, e2e tested | live state hash is equal before and after a review |
-| Native/WASM canonical replay equivalence | done for one checkpoint | e2e: the browser's replay to tick 300 gives the native fixture hash `445c9821cc99a621` (event 429) |
+| Native/WASM canonical replay equivalence | done for one checkpoint | e2e: the browser's replay to tick 300 gives the native fixture hash `e50a3b2c297ad748` (event 429). The hash changed with the v2 canonical encoding, which records chunks |
 
 ### What `just verify` checked
 
@@ -163,9 +163,10 @@ still apply.
 | Item | Status | Evidence |
 | --- | --- | --- |
 | Geometry: named frames, versioned `T_parent_from_child`, unit-quaternion tolerance | done, tested | `crates/verimap-geometry`; docs/coordinates.md. Outside the proof boundary (f64). Round trip and an independent +90° yaw fixture |
+| Surface chunks: 32×32 cells, floor indexing, replace/delete events, protocol 0.3 | done, tested, proof checked | `crates/verimap-domain/src/chunk.rs`; kernel `cell_index`/`chunk_cell`; docs/verification.md rows 9a–9c. A height grid is not overhangs. The UI lists chunks but does not draw them yet (issue #6) |
 
-Chunk state, pose/camera/LiDAR sources, surface rendering, and the rest of
-M2 are not started. Issues #1 and #3–#13.
+Pose, camera, and LiDAR sources, surface rendering, and the rest of M2 are
+not started. Issues #3–#13.
 
 ## Not started
 

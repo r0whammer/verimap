@@ -8,10 +8,10 @@
 //! tests and diagnostics, not a cryptographic digest.
 
 use crate::store::{Record, Records};
-use crate::{Annotation, Entity, SceneStore, TrackFix};
+use crate::{Annotation, Cell, Entity, SceneStore, SurfaceChunk, TrackFix};
 
 /// Identifies the encoding; bump it whenever the layout changes.
-const MAGIC: &[u8] = b"verimap-scene-state-v1";
+const MAGIC: &[u8] = b"verimap-scene-state-v2";
 
 struct Encoder {
     out: Vec<u8>,
@@ -23,6 +23,10 @@ impl Encoder {
     }
 
     fn u16(&mut self, v: u16) {
+        self.out.extend_from_slice(&v.to_le_bytes());
+    }
+
+    fn i32(&mut self, v: i32) {
         self.out.extend_from_slice(&v.to_le_bytes());
     }
 
@@ -96,6 +100,19 @@ impl Encoder {
         self.i64(a.position().z_mm());
         self.str(a.placement().as_str());
     }
+
+    fn cell(&mut self, cell: &Cell) {
+        self.i32(cell.height_mm());
+        self.u16(cell.occupancy_bp());
+        self.u8(u8::from(cell.is_known()));
+    }
+
+    fn chunk(&mut self, chunk: &SurfaceChunk) {
+        self.str(chunk.frame());
+        for cell in chunk.cells() {
+            self.cell(cell);
+        }
+    }
 }
 
 impl SceneStore {
@@ -110,6 +127,23 @@ impl SceneStore {
         let (entities, annotations) = self.records();
         e.records(entities, Encoder::entity);
         e.records(annotations, Encoder::annotation);
+        let chunks = self.chunk_records();
+        e.len(chunks.len());
+        for (id, record) in chunks {
+            e.i32(id.ix());
+            e.i32(id.iy());
+            match record {
+                Record::Live { revision, value } => {
+                    e.u8(1);
+                    e.u64(*revision);
+                    e.chunk(value);
+                }
+                Record::Deleted { revision } => {
+                    e.u8(2);
+                    e.u64(*revision);
+                }
+            }
+        }
         e.out
     }
 

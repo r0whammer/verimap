@@ -4,8 +4,8 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use verimap_domain::{
-    Annotation, Entity, EntityClass, Freshness, HistoryEntry, ObservationRef, Placement,
-    ScenePoint, TrackFix,
+    Annotation, Cell, ChunkId, Entity, EntityClass, Freshness, HistoryEntry, ObservationRef,
+    Placement, ScenePoint, SurfaceChunk, TrackFix,
 };
 
 use crate::U64String;
@@ -298,6 +298,66 @@ pub struct IngestStatsDto {
     pub late: U64String,
 }
 
+/// One reconstructed cell. Unknown cells have `known: false`, height 0, and
+/// occupancy 0. That is not the same as an observed empty cell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CellDto {
+    /// Height above the anchor, millimetres. Zero when unknown.
+    #[schemars(range(min = -100000000, max = 100000000))]
+    pub height_mm: i32,
+    /// Occupancy in basis points. Zero when unknown or observed empty.
+    #[schemars(range(max = 10000))]
+    pub occupancy_bp: u16,
+    /// Whether a sensor has reported this cell.
+    pub known: bool,
+}
+
+impl From<Cell> for CellDto {
+    fn from(cell: Cell) -> Self {
+        Self {
+            height_mm: cell.height_mm(),
+            occupancy_bp: cell.occupancy_bp(),
+            known: cell.is_known(),
+        }
+    }
+}
+
+/// A 32 × 32 surface chunk in the scene frame.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ChunkDto {
+    /// `ix,iy`, the key the view uses to upsert the chunk.
+    pub id: String,
+    /// Easting chunk index. Negative is west of the anchor.
+    pub ix: i32,
+    /// Northing chunk index.
+    pub iy: i32,
+    /// Sequence of the event that wrote the chunk.
+    pub revision: U64String,
+    /// Row-major cells, 32 × 32. A height grid does not represent overhangs.
+    pub cells: Vec<CellDto>,
+}
+
+impl ChunkDto {
+    /// The DTO of `chunk` at `revision`.
+    pub fn new(chunk: &SurfaceChunk, revision: u64) -> Self {
+        let id = chunk.id();
+        Self {
+            id: chunk_key(id),
+            ix: id.ix(),
+            iy: id.iy(),
+            revision: revision.into(),
+            cells: chunk.cells().iter().copied().map(CellDto::from).collect(),
+        }
+    }
+}
+
+/// `ix,iy` text for a chunk id.
+pub fn chunk_key(id: ChunkId) -> String {
+    format!("{},{}", id.ix(), id.iy())
+}
+
 /// A change to what the view shows.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -317,6 +377,10 @@ pub struct SceneUpdateDto {
     pub annotations: Vec<AnnotationDto>,
     /// Annotation IDs no longer present.
     pub removed_annotations: Vec<String>,
+    /// Surface chunks added or replaced.
+    pub chunks: Vec<ChunkDto>,
+    /// Chunk ids no longer present, `ix,iy`.
+    pub removed_chunks: Vec<String>,
     /// Why the request stopped early, when the changes above are only part
     /// of what was asked (for example a full journal stops the simulation).
     pub problem: Option<ProblemDto>,
@@ -377,5 +441,24 @@ mod tests {
             Placement::from(PlacementDto::from(Placement::GroundPlane)),
             Placement::GroundPlane
         );
+    }
+
+    #[test]
+    fn chunk_dto_copies_every_cell() {
+        use verimap_domain::{CELL_COUNT, Cell, ChunkId, SCENE_FRAME, SurfaceChunk};
+        let mut cells = vec![Cell::unknown(); CELL_COUNT];
+        cells[1] = Cell::observed(1_500, 0).unwrap();
+        let chunk =
+            SurfaceChunk::from_cells(ChunkId::new(0, -1).unwrap(), SCENE_FRAME, &cells).unwrap();
+        let dto = ChunkDto::new(&chunk, 7);
+        assert_eq!(dto.id, "0,-1");
+        assert_eq!(dto.ix, 0);
+        assert_eq!(dto.iy, -1);
+        assert_eq!(dto.revision.0, 7);
+        assert!(!dto.cells[0].known);
+        assert_eq!(dto.cells[1].height_mm, 1_500);
+        assert_eq!(dto.cells[1].occupancy_bp, 0);
+        assert!(dto.cells[1].known);
+        assert_eq!(dto.cells.len(), CELL_COUNT);
     }
 }

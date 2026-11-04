@@ -65,6 +65,8 @@ const emptyScene: SceneUpdateDto = {
   removed_entities: [],
   annotations: [],
   removed_annotations: [],
+  chunks: [],
+  removed_chunks: [],
   problem: null,
 };
 

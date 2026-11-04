@@ -1,6 +1,6 @@
 # Worker bridge protocol
 
-The messages between the UI thread and the core worker. Version **0.2**.
+The messages between the UI thread and the core worker. Version **0.3**.
 The source of truth is `crates/verimap-protocol`. Never edit the generated
 files `schemas/worker-bridge.schema.json` (JSON Schema 2020-12) and
 `web/src/generated/protocol.ts` by hand. Regenerate them with `just gen`;
@@ -24,7 +24,7 @@ TypeScript types describe the messages but validate nothing at runtime. The
 Rust side parses and validates every request. The UI checks that an event
 has a known `type` and fails the session if it does not.
 
-## Messages (0.2)
+## Messages (0.3)
 
 Requests (UI → core):
 
@@ -65,10 +65,12 @@ it.
 
 - `replace: true`: the lists are the complete view, and the UI discards
   everything else (`ready`, `review`, `go_live`).
-- `replace: false`: upserts (`entities`, `annotations`) and removals
-  (`removed_entities`, `removed_annotations`) by ID. They cover every object
-  the request created, changed, or deleted, and every track whose freshness
-  changed because the clock moved.
+- `replace: false`: upserts (`entities`, `annotations`, `chunks`) and removals
+  (`removed_entities`, `removed_annotations`, `removed_chunks`) by ID. They
+  cover every object the request created, changed, or deleted, and every
+  track whose freshness changed because the clock moved. A chunk id is the
+  text `ix,iy`. Unknown cells (`known: false`, height 0, occupancy 0) are
+  not observed-empty cells, and a height grid does not represent overhangs.
 - `timeline`: the view's mode, tick, and last sequence, the live tick and
   sequence, and the journal's size and bound.
 - `stats`: the live session's observation counts.

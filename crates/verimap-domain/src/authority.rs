@@ -5,8 +5,9 @@
 use verimap_kernel::{Slot, base_revision_matches, next_sequence};
 
 use crate::{
-    Annotation, ApplyError, Changes, CommittedEvent, DomainError, EntityClass, EventPayload,
-    ObjectId, ObservationRef, Placement, Provenance, ScenePoint, SceneStore, SiteFrame, TrackFix,
+    Annotation, ApplyError, Changes, ChunkId, CommittedEvent, DomainError, EntityClass,
+    EventPayload, ObjectId, ObservationRef, Placement, Provenance, ScenePoint, SceneStore,
+    SiteFrame, SurfaceChunk, TrackFix,
 };
 
 /// Which track an observation belongs to, as the estimator decided.
@@ -73,6 +74,20 @@ pub enum Command {
         /// Revision the operator saw.
         base_revision: u64,
     },
+    /// Replace one surface chunk in full. The chunk is validated before
+    /// anything is journaled.
+    ReplaceChunk {
+        /// Validated chunk. Built with [`SurfaceChunk::from_cells`], which
+        /// rejects a bad cell without producing a partial chunk.
+        chunk: SurfaceChunk,
+    },
+    /// Delete a chunk, if it is unchanged since `base_revision`.
+    DeleteChunk {
+        /// Chunk id.
+        id: ChunkId,
+        /// Revision the operator saw.
+        base_revision: u64,
+    },
 }
 
 /// Why a command was not committed. Nothing changes when `submit` fails.
@@ -113,6 +128,25 @@ pub enum CommandError {
     IdSpaceExhausted,
     /// The reducer refused the event.
     Rejected(ApplyError),
+    /// No chunk with this id exists in the epoch.
+    ChunkNotFound {
+        /// Chunk id.
+        id: ChunkId,
+    },
+    /// The chunk was deleted.
+    ChunkDeleted {
+        /// Chunk id.
+        id: ChunkId,
+    },
+    /// The chunk changed since the revision the edit was based on.
+    ChunkPreconditionFailed {
+        /// Chunk id.
+        id: ChunkId,
+        /// Revision the edit was based on.
+        base_revision: u64,
+        /// The chunk's current revision.
+        current: u64,
+    },
 }
 
 impl core::fmt::Display for CommandError {
@@ -137,6 +171,18 @@ impl core::fmt::Display for CommandError {
             Self::SequenceExhausted => write!(f, "the event sequence is exhausted"),
             Self::IdSpaceExhausted => write!(f, "no free object ID"),
             Self::Rejected(e) => write!(f, "{e}"),
+            Self::ChunkNotFound { id } => write!(f, "chunk {},{} does not exist", id.ix(), id.iy()),
+            Self::ChunkDeleted { id } => write!(f, "chunk {},{} was deleted", id.ix(), id.iy()),
+            Self::ChunkPreconditionFailed {
+                id,
+                base_revision,
+                current,
+            } => write!(
+                f,
+                "chunk {},{} changed since revision {base_revision} (now {current})",
+                id.ix(),
+                id.iy()
+            ),
         }
     }
 }
@@ -285,6 +331,24 @@ impl Authority {
                     EventPayload::AnnotationDeleted { id },
                 )
             }
+            Command::ReplaceChunk { chunk } => {
+                if !chunk.id().intersects_xy(store.site().bounds()) {
+                    return Err(DomainError::OutsideSite { field: "chunk" }.into());
+                }
+                (
+                    tick,
+                    Provenance::Operator,
+                    EventPayload::ChunkReplaced { chunk },
+                )
+            }
+            Command::DeleteChunk { id, base_revision } => {
+                check_chunk_base(&id, store.chunk_slot(&id), base_revision)?;
+                (
+                    tick,
+                    Provenance::Operator,
+                    EventPayload::ChunkDeleted { id },
+                )
+            }
         };
         let event = CommittedEvent {
             epoch: self.store.epoch(),
@@ -329,6 +393,21 @@ pub fn replay(
 
 /// Checks an edit's base revision with the kernel's precondition guard,
 /// and says precisely why it failed.
+fn check_chunk_base(id: &ChunkId, slot: Slot, base_revision: u64) -> Result<(), CommandError> {
+    if base_revision_matches(slot, base_revision) {
+        return Ok(());
+    }
+    Err(match slot {
+        Slot::Vacant => CommandError::ChunkNotFound { id: *id },
+        Slot::Deleted { .. } => CommandError::ChunkDeleted { id: *id },
+        Slot::Live { revision } => CommandError::ChunkPreconditionFailed {
+            id: *id,
+            base_revision,
+            current: revision,
+        },
+    })
+}
+
 fn check_base(id: &ObjectId, slot: Slot, base_revision: u64) -> Result<(), CommandError> {
     if base_revision_matches(slot, base_revision) {
         return Ok(());

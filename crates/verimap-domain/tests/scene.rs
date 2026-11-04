@@ -10,10 +10,11 @@
 
 use proptest::prelude::*;
 use verimap_domain::{
-    ApplyError, Association, Authority, Command, CommandError, CommittedEvent, Confidence,
-    Detection, EntityClass, EventPayload, Freshness, GeodeticAnchor, ObjectId, ObservationRef,
-    Placement, Provenance, Refusal, STALE_AFTER_TICKS, SceneBounds, ScenePoint, SiteFrame, SiteId,
-    SourceId, TrackFix, TrackTarget, TrackerConfig, Uncertainty, associate, replay,
+    ApplyError, Association, Authority, CELL_COUNT, Cell, ChunkId, Command, CommandError,
+    CommittedEvent, Confidence, Detection, EntityClass, EventPayload, Freshness, GeodeticAnchor,
+    ObjectId, ObservationRef, Placement, Provenance, Refusal, SCENE_FRAME, STALE_AFTER_TICKS,
+    SceneBounds, ScenePoint, SiteFrame, SiteId, SourceId, SurfaceChunk, TrackFix, TrackTarget,
+    TrackerConfig, Uncertainty, associate, replay,
 };
 
 fn site() -> SiteFrame {
@@ -570,6 +571,141 @@ fn crossing_tracks_follow_the_documented_rule() {
     // within a frame, so trk:2 receives nothing and coasts.
     assert_eq!(assigned[1], [id("trk:1"), id("trk:1")]);
     assert_eq!(assigned[2].len(), 2);
+}
+
+fn unknown_chunk() -> SurfaceChunk {
+    SurfaceChunk::from_cells(
+        ChunkId::new(0, -1).unwrap(),
+        SCENE_FRAME,
+        &vec![Cell::unknown(); CELL_COUNT],
+    )
+    .unwrap()
+}
+
+fn observed_chunk() -> SurfaceChunk {
+    let mut cells = vec![Cell::unknown(); CELL_COUNT];
+    cells[0] = Cell::observed(1_250, 0).unwrap();
+    SurfaceChunk::from_cells(ChunkId::new(0, -1).unwrap(), SCENE_FRAME, &cells).unwrap()
+}
+
+#[test]
+fn chunk_replacement_keeps_identity_and_tombstones_block_resurrection() {
+    let mut a = authority();
+    let id = ChunkId::new(0, -1).unwrap();
+    let outside = SurfaceChunk::from_cells(
+        ChunkId::new(20, 0).unwrap(),
+        SCENE_FRAME,
+        &vec![Cell::unknown(); CELL_COUNT],
+    )
+    .unwrap();
+    assert!(matches!(
+        assert_rejected(&mut a, Command::ReplaceChunk { chunk: outside }),
+        CommandError::Invalid(_)
+    ));
+    assert!(matches!(
+        assert_rejected(
+            &mut a,
+            Command::DeleteChunk {
+                id,
+                base_revision: 1,
+            }
+        ),
+        CommandError::ChunkNotFound { .. }
+    ));
+
+    a.submit(Command::ReplaceChunk {
+        chunk: unknown_chunk(),
+    })
+    .unwrap();
+    let (revision, stored) = a.store().chunk(&id).unwrap();
+    assert_eq!(revision, 1);
+    assert!(!stored.cell(0, 0).unwrap().is_known());
+    assert!(a.store().chunks().any(|(r, c)| r == 1 && c.id() == id));
+
+    // A new sequence applies even when the cells are unchanged: the revision
+    // is the authority sequence, not a content hash.
+    a.submit(Command::ReplaceChunk {
+        chunk: unknown_chunk(),
+    })
+    .unwrap();
+    assert_eq!(a.store().chunk(&id).map(|(r, _)| r), Some(2));
+
+    a.submit(Command::ReplaceChunk {
+        chunk: observed_chunk(),
+    })
+    .unwrap();
+    let (revision, stored) = a.store().chunk(&id).unwrap();
+    assert_eq!(revision, 3);
+    assert_eq!(stored.cell(0, 0).unwrap().height_mm(), 1_250);
+    assert_eq!(stored.id(), id, "replacing cells keeps the chunk id");
+
+    assert!(matches!(
+        assert_rejected(
+            &mut a,
+            Command::DeleteChunk {
+                id,
+                base_revision: 1,
+            }
+        ),
+        CommandError::ChunkPreconditionFailed { current: 3, .. }
+    ));
+    a.submit(Command::DeleteChunk {
+        id,
+        base_revision: 3,
+    })
+    .unwrap();
+    assert!(a.store().chunk(&id).is_none());
+    assert!(matches!(
+        a.store().chunk_slot(&id),
+        verimap_domain::Slot::Deleted { revision: 4 }
+    ));
+    // The tombstone is part of the canonical state, so a hash covers it.
+    let _ = a.store().state_hash();
+
+    // A newer replacement cannot resurrect the tombstone.
+    assert_eq!(
+        assert_rejected(
+            &mut a,
+            Command::ReplaceChunk {
+                chunk: observed_chunk(),
+            }
+        ),
+        CommandError::Rejected(ApplyError::ChunkRefused {
+            id,
+            refusal: Refusal::Tombstoned,
+        })
+    );
+    assert!(matches!(
+        assert_rejected(
+            &mut a,
+            Command::DeleteChunk {
+                id,
+                base_revision: 4,
+            }
+        ),
+        CommandError::ChunkDeleted { .. }
+    ));
+
+    // An observation-provenance replacement is accepted by the store on a
+    // vacant id, and a clock-provenance one is not.
+    let mut store = replay(site(), 1, &[]).unwrap();
+    let obs = CommittedEvent {
+        epoch: 1,
+        sequence: 1,
+        tick: 0,
+        provenance: Provenance::Observation(source(1)),
+        payload: EventPayload::ChunkReplaced {
+            chunk: observed_chunk(),
+        },
+    };
+    store.apply(&obs).unwrap();
+    assert_eq!(store.chunk(&id).map(|(r, _)| r), Some(1));
+    let mut clocked = obs.clone();
+    clocked.sequence = 2;
+    clocked.provenance = Provenance::Clock;
+    assert_eq!(store.apply(&clocked), Err(ApplyError::ProvenanceMismatch));
+    let replayed = replay(site(), 1, &[obs]).unwrap();
+    assert_eq!(replayed.state_hash(), store.state_hash());
 }
 
 proptest! {

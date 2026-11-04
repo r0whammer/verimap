@@ -34,6 +34,19 @@ These guards are proved for the generated model; see
 [verification.md](verification.md) rows 1a–1d. Millimetre storage is a
 representation, not an accuracy claim.
 
+## Surface grid
+
+A reconstructed chunk is 32 × 32 cells at 1 m (`CELL_SIZE_MM` = 1000,
+`CELLS_PER_CHUNK` = 32). `cell_index` is floor division by one metre, so
+−1 mm is cell −1, not cell 0. `chunk_cell` then writes
+
+`cell = chunk * 32 + local` with `local` in `0..32`,
+
+including for negative cells: cell −1 is local 31 of chunk −1. Both
+functions are proved for the generated model (verification.md rows 9a–9c).
+Coordinates outside ±100 km are rejected before the division. A height in a
+cell is not a claim about overhangs.
+
 The bundled **Synthetic Site Alpha** (`verimap-sim`, fictional) is anchored
 at (−98.35°, 38.75°, 0 m ellipsoidal). Its bounds are x, y ∈ [−100 m, 100 m]
 and z ∈ [−20 m, 80 m], a 200 m × 200 m site.
@@ -83,8 +96,7 @@ the extracted kernel: every component is `f64`.
 These come from CLAUDE.md §5 and are listed here so the first code that uses
 them matches:
 
-- Surface chunks: 32 × 32 cells at 1 m. Cell and chunk indices will use
-  floor division, so −1 mm falls in cell −1, not cell 0. The rounding rule
-  for converting f64 metres to millimetres will be documented with the code.
+- The rounding rule for converting f64 metres to millimetres will be
+  documented with the code that does that conversion.
 - Confidence: integer basis points in [0, 10 000] (implemented in the
   kernel; not yet on the wire).

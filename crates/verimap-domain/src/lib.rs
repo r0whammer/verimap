@@ -20,6 +20,7 @@
 mod annotation;
 mod authority;
 mod canonical;
+mod chunk;
 mod entity;
 mod error;
 mod event;
@@ -36,6 +37,7 @@ pub use authority::{
     Authority, Command, CommandError, OPERATOR_NAMESPACE, TRACK_NAMESPACE, TrackTarget, replay,
 };
 pub use canonical::fnv1a64;
+pub use chunk::{CELL_COUNT, CHUNK_EDGE, Cell, ChunkId, SCENE_FRAME, SurfaceChunk};
 pub use entity::{
     Confidence, EXPIRE_AFTER_TICKS, Entity, EntityClass, Freshness, HistoryEntry, ObservationRef,
     STALE_AFTER_TICKS, TICK_MS, TrackFix, Uncertainty,

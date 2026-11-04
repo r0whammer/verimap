@@ -286,6 +286,77 @@ pub fn slot_delete(slot: Slot, revision: u64) -> Transition {
     }
 }
 
+/// Cell edge of the first surface grid, millimetres. One cell is one metre.
+pub const CELL_SIZE_MM: i64 = 1_000;
+
+/// Cells along one edge of a surface chunk.
+pub const CELLS_PER_CHUNK: i64 = 32;
+
+/// Floor-divides an in-range scene coordinate by [`CELL_SIZE_MM`].
+///
+/// `-1` mm is cell `-1`, not cell `0`. Coordinates outside
+/// [`COORD_MIN_MM`]`..=`[`COORD_MAX_MM`] are rejected, so the division stays
+/// inside `i64` and the result is at most `±10⁵`.
+pub fn cell_index(coord_mm: i64) -> Result<i64, KernelError> {
+    if !coord_in_range(coord_mm) {
+        return Err(KernelError::CoordinateOutOfRange);
+    }
+    Ok(floor_div_const(coord_mm, CELL_SIZE_MM))
+}
+
+/// Where a cell sits in the chunk grid: `cell = chunk * CELLS_PER_CHUNK + local`
+/// with `local` in `0..CELLS_PER_CHUNK`, including for negative cells.
+#[derive(Clone, Copy)]
+pub struct ChunkCell {
+    chunk: i64,
+    local: i64,
+}
+
+impl ChunkCell {
+    /// Chunk index along this axis. Negative cells fall in negative chunks.
+    pub fn chunk(self) -> i64 {
+        self.chunk
+    }
+
+    /// Cell offset inside the chunk, `0..CELLS_PER_CHUNK`.
+    pub fn local(self) -> i64 {
+        self.local
+    }
+}
+
+/// Smallest cell index [`cell_index`] returns. [`COORD_MIN_MM`] is divisible
+/// by [`CELL_SIZE_MM`], so this division is exact.
+pub const CELL_INDEX_MIN: i64 = COORD_MIN_MM / CELL_SIZE_MM;
+
+/// Largest cell index [`cell_index`] returns.
+pub const CELL_INDEX_MAX: i64 = COORD_MAX_MM / CELL_SIZE_MM;
+
+/// Splits a cell index from [`cell_index`] into a chunk index and a
+/// non-negative offset. Cells outside that range are rejected, so `chunk - 1`
+/// cannot underflow `i64`.
+pub fn chunk_cell(cell: i64) -> Result<ChunkCell, KernelError> {
+    if cell < CELL_INDEX_MIN || cell > CELL_INDEX_MAX {
+        return Err(KernelError::CoordinateOutOfRange);
+    }
+    let q = cell / CELLS_PER_CHUNK;
+    let r = cell % CELLS_PER_CHUNK;
+    if r < 0 {
+        Ok(ChunkCell {
+            chunk: q - 1,
+            local: r + CELLS_PER_CHUNK,
+        })
+    } else {
+        Ok(ChunkCell { chunk: q, local: r })
+    }
+}
+
+/// Floor division by a positive constant. `d` is 1000 or 32, never zero.
+fn floor_div_const(n: i64, d: i64) -> i64 {
+    let q = n / d;
+    let r = n % d;
+    if r != 0 && n < 0 { q - 1 } else { q }
+}
+
 /// Whether an edit made against `base_revision` may proceed: the object
 /// exists and has not changed since. Operator edits carry this precondition
 /// so they never silently overwrite a newer change.
