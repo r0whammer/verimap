@@ -514,6 +514,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "verimap-geometry"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+]
+
+[[package]]
 name = "verimap-kernel"
 version = "0.1.0"
 dependencies = [
