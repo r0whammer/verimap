@@ -36,7 +36,10 @@
           # browser target. One compiler for native, WASM, and extraction.
           rustToolchain = aeneas.inputs.charon.packages.${system}.rustToolchain.override (old: {
             # llvm-tools: llvm-profdata and llvm-cov for `just coverage`.
-            extensions = (old.extensions or [ ]) ++ [ "rust-analyzer" "llvm-tools" ];
+            extensions = (old.extensions or [ ]) ++ [
+              "rust-analyzer"
+              "llvm-tools"
+            ];
             targets = (old.targets or [ ]) ++ [ "wasm32-unknown-unknown" ];
           });
           # Must equal the `wasm-bindgen` crate version in Cargo.lock
