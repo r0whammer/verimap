@@ -2,7 +2,10 @@
 //! noise, dropouts, and delivery delay. Its output enters the same
 //! normalization path a physical source would.
 
-use verimap_domain::{EntityClass, ObservationEnvelope, ObservationPayload, SCENE_FRAME_ID};
+use verimap_domain::{
+    AdapterPhase, EntityClass, ObservationEnvelope, ObservationPayload, SCENE_FRAME_ID,
+    SourceCapabilities, SourceHealth,
+};
 
 use crate::rng::SplitMix64;
 use crate::truth::Truth;
@@ -31,6 +34,7 @@ pub(crate) struct Detector {
     /// Delivery delay is uniform in `0..=max_delay_ticks`.
     pub(crate) max_delay_ticks: u64,
     next_sequence: u64,
+    phase: AdapterPhase,
 }
 
 impl Detector {
@@ -43,7 +47,41 @@ impl Detector {
             reported_sigma_m: 1.5,
             max_delay_ticks: 3,
             next_sequence: 1,
+            phase: AdapterPhase::Running,
         }
+    }
+
+    // The demo leaves the detector running; tests cover stop/start.
+    #[allow(dead_code)]
+    pub(crate) fn capabilities(&self) -> SourceCapabilities {
+        SourceCapabilities {
+            reports_pose: false,
+            reports_detections: true,
+            reports_ranges: false,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn phase(&self) -> AdapterPhase {
+        self.phase
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn health(&self) -> SourceHealth {
+        match self.phase {
+            AdapterPhase::Running => SourceHealth::Healthy,
+            AdapterPhase::Stopped => SourceHealth::Unavailable,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn start(&mut self) {
+        self.phase = AdapterPhase::Running;
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn stop(&mut self) {
+        self.phase = AdapterPhase::Stopped;
     }
 
     /// The observation taken at `tick`, if any, and its delivery tick.
@@ -54,7 +92,7 @@ impl Detector {
         tick: u64,
         rng: &mut SplitMix64,
     ) -> Option<(u64, ObservationEnvelope)> {
-        if !tick.is_multiple_of(self.period_ticks) {
+        if self.phase != AdapterPhase::Running || !tick.is_multiple_of(self.period_ticks) {
             return None;
         }
         let (x, y) = truth.vehicle.position(tick);
@@ -91,5 +129,28 @@ impl Detector {
                 },
             },
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::rng::SplitMix64;
+    use crate::truth::Truth;
+
+    #[test]
+    fn stopping_suppresses_the_next_frame() {
+        let mut detector = Detector::demo();
+        assert!(detector.capabilities().reports_detections);
+        assert!(!detector.capabilities().reports_pose);
+        assert_eq!(detector.health(), SourceHealth::Healthy);
+        detector.stop();
+        assert_eq!(detector.phase(), AdapterPhase::Stopped);
+        assert_eq!(detector.health(), SourceHealth::Unavailable);
+        let mut rng = SplitMix64::new(1);
+        assert!(detector.sense(&Truth::demo(), 2, &mut rng).is_none());
+        detector.start();
+        assert_eq!(detector.phase(), AdapterPhase::Running);
+        assert!(detector.sense(&Truth::demo(), 2, &mut rng).is_some());
     }
 }

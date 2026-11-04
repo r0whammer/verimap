@@ -34,6 +34,12 @@ pub(crate) struct Truth {
 }
 
 impl Truth {
+    /// Known platform position at `tick`, millimetres. The demo platform
+    /// follows the vehicle path; this is an assumption, not an estimate.
+    pub(crate) fn platform_position_mm(&self, tick: u64) -> (i64, i64) {
+        self.vehicle.position(tick)
+    }
+
     /// The bundled scenario: a vehicle lapping a 120 m × 80 m loop at
     /// 5 m/s (80 s per lap), passing behind a building on the north side
     /// for 8 s per lap.

@@ -11,6 +11,7 @@
 
 #![forbid(unsafe_code)]
 
+mod pose;
 mod rng;
 mod sensor;
 mod session;
@@ -28,7 +29,10 @@ pub const SCENE_VERSION: u32 = 2;
 
 /// Version of the simulator's behavior (sensors, noise, delivery). Bump it
 /// whenever the same seed would produce different observations.
-pub const SIMULATOR_VERSION: u32 = 1;
+///
+/// 2: a pose source reports the known platform path. Pose samples are not
+/// journaled as scene state, so committed-event hashes are unchanged.
+pub const SIMULATOR_VERSION: u32 = 2;
 
 /// Seed of the demo session the web client starts.
 pub const DEMO_SEED: u64 = 1;
@@ -56,6 +60,7 @@ pub struct Simulator {
     rng: rng::SplitMix64,
     truth: truth::Truth,
     detector: sensor::Detector,
+    pose: pose::PoseSource,
     /// Observations taken but not yet delivered, with delivery ticks.
     in_flight: Vec<(u64, ObservationEnvelope)>,
 }
@@ -68,6 +73,7 @@ impl Simulator {
             rng: rng::SplitMix64::new(seed),
             truth: truth::Truth::demo(),
             detector: sensor::Detector::demo(),
+            pose: pose::PoseSource::demo(seed),
             in_flight: Vec::new(),
         }
     }
@@ -75,6 +81,11 @@ impl Simulator {
     /// Current simulation tick.
     pub fn tick(&self) -> u64 {
         self.tick
+    }
+
+    /// Health of the pose adapter.
+    pub fn pose_health(&self) -> verimap_domain::SourceHealth {
+        self.pose.health()
     }
 
     /// Advances one tick and returns the observations delivered at the new
@@ -85,13 +96,22 @@ impl Simulator {
         if let Some(taken) = self.detector.sense(&self.truth, self.tick, &mut self.rng) {
             self.in_flight.push(taken);
         }
+        if let Some(taken) = self.pose.acquire(&self.truth, self.tick) {
+            self.in_flight.push(taken);
+        }
         let now = self.tick;
         let (mut due, waiting): (Vec<_>, Vec<_>) = self
             .in_flight
             .drain(..)
             .partition(|(deliver, _)| *deliver <= now);
         self.in_flight = waiting;
-        due.sort_by_key(|(deliver, e)| (*deliver, e.sequence));
+        due.sort_by(|a, b| {
+            (a.0, a.1.source_id.as_str(), a.1.sequence).cmp(&(
+                b.0,
+                b.1.source_id.as_str(),
+                b.1.sequence,
+            ))
+        });
         due.into_iter().map(|(_, e)| e).collect()
     }
 }

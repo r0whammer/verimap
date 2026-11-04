@@ -164,6 +164,7 @@ still apply.
 | --- | --- | --- |
 | Geometry: named frames, versioned `T_parent_from_child`, unit-quaternion tolerance | done, tested | `crates/verimap-geometry`; docs/coordinates.md. Outside the proof boundary (f64). Round trip and an independent +90° yaw fixture |
 | Surface chunks: 32×32 cells, floor indexing, replace/delete events, protocol 0.3 | done, tested, proof checked | `crates/verimap-domain/src/chunk.rs`; kernel `cell_index`/`chunk_cell`; docs/verification.md rows 9a–9c. A height grid is not overhangs. The UI lists chunks but does not draw them yet (issue #6) |
+| Sensor adapter contract and simulated pose source | done, tested | `verimap-domain` adapter types; `verimap-sim` `PoseSource`. Known platform pose, not SLAM. Poses are normalized and logged; they are not scene events, so the demo state hash is unchanged. Simulator version 2 |
 
 Pose, camera, and LiDAR sources, surface rendering, and the rest of M2 are
 not started. Issues #3–#13.

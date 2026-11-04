@@ -129,7 +129,7 @@ fn demo_vehicle_goes_stale_behind_the_building_and_keeps_its_track() {
     let stats = session.stats();
     assert_eq!(
         stats.received,
-        stats.accepted + stats.rejected + stats.duplicates + stats.late
+        stats.accepted + stats.rejected + stats.duplicates + stats.late + stats.poses
     );
     assert!(stats.late > 0, "delivery delay produces late observations");
     assert_eq!(stats.rejected, 0);
