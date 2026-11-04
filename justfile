@@ -103,6 +103,7 @@ proofs-cache: _proofs-ready
 audit: proofs
     scripts/audit.sh
     scripts/proof-inventory.sh
+    scripts/check-badges.sh proofs lean
 
 # Fail if committed generated output is stale, modified, missing, or untracked
 check-generated: _nix
