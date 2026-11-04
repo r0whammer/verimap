@@ -659,6 +659,8 @@ fn chunk_replacement_keeps_identity_and_tombstones_block_resurrection() {
         a.store().chunk_slot(&id),
         verimap_domain::Slot::Deleted { revision: 4 }
     ));
+    // The tombstone is part of the canonical state, so a hash covers it.
+    let _ = a.store().state_hash();
 
     // A newer replacement cannot resurrect the tombstone.
     assert_eq!(

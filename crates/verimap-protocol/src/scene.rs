@@ -442,4 +442,23 @@ mod tests {
             Placement::GroundPlane
         );
     }
+
+    #[test]
+    fn chunk_dto_copies_every_cell() {
+        use verimap_domain::{CELL_COUNT, Cell, ChunkId, SCENE_FRAME, SurfaceChunk};
+        let mut cells = vec![Cell::unknown(); CELL_COUNT];
+        cells[1] = Cell::observed(1_500, 0).unwrap();
+        let chunk =
+            SurfaceChunk::from_cells(ChunkId::new(0, -1).unwrap(), SCENE_FRAME, &cells).unwrap();
+        let dto = ChunkDto::new(&chunk, 7);
+        assert_eq!(dto.id, "0,-1");
+        assert_eq!(dto.ix, 0);
+        assert_eq!(dto.iy, -1);
+        assert_eq!(dto.revision.0, 7);
+        assert!(!dto.cells[0].known);
+        assert_eq!(dto.cells[1].height_mm, 1_500);
+        assert_eq!(dto.cells[1].occupancy_bp, 0);
+        assert!(dto.cells[1].known);
+        assert_eq!(dto.cells.len(), CELL_COUNT);
+    }
 }

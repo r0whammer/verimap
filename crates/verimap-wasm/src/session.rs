@@ -734,6 +734,35 @@ mod tests {
             let problem = problem(&e);
             assert_eq!(problem.code, mapped.code);
         }
+        let mut session = verimap_sim::LocalSession::new(1).unwrap();
+        let chunk = verimap_domain::SurfaceChunk::from_cells(
+            chunk,
+            verimap_domain::SCENE_FRAME,
+            &vec![verimap_domain::Cell::unknown(); verimap_domain::CELL_COUNT],
+        )
+        .unwrap();
+        session
+            .authority_mut()
+            .submit(verimap_domain::Command::ReplaceChunk {
+                chunk: chunk.clone(),
+            })
+            .unwrap();
+        let mut changes = Changes::default();
+        changes.chunks.insert(chunk.id());
+        let update = delta_update(&session, None, &changes);
+        assert_eq!(update.chunks.len(), 1);
+        assert!(update.removed_chunks.is_empty());
+        session
+            .authority_mut()
+            .submit(verimap_domain::Command::DeleteChunk {
+                id: chunk.id(),
+                base_revision: 1,
+            })
+            .unwrap();
+        let update = delta_update(&session, None, &changes);
+        assert!(update.chunks.is_empty());
+        assert_eq!(update.removed_chunks, vec![chunk_key(chunk.id())]);
+
         let replayed = replay_error(ApplyError::SequenceExhausted);
         assert_eq!(replayed.code, ErrorCode::Internal);
         assert!(replayed.message.contains("replay"));

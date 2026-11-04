@@ -10,3 +10,12 @@ crates/verimap-wasm/src/session.rs:92 bundled demo site cannot fail in this buil
 crates/verimap-wasm/src/session.rs:93 bundled demo site cannot fail in this build
 crates/verimap-wasm/src/session.rs:96 closing the branch taken only when session construction fails
 crates/verimap-wasm/src/session.rs:98 live session is assigned on the line above
+
+# A chunk index from cell_index is at most about ±3125, which always fits i32.
+crates/verimap-domain/src/chunk.rs:44 chunk index from the kernel range fits i32
+crates/verimap-domain/src/chunk.rs:46 chunk index from the kernel range fits i32
+# chunk_cell accepts CELL_INDEX_MIN and CELL_INDEX_MAX; the Err arms do not run.
+crates/verimap-domain/src/chunk.rs:84 cell-index bounds are valid chunk_cell inputs
+crates/verimap-domain/src/chunk.rs:87 cell-index bounds are valid chunk_cell inputs
+# Confidence::new's only error is ConfidenceOutOfRange; the match is exhaustive.
+crates/verimap-domain/src/chunk.rs:157 occupancy check has one kernel error

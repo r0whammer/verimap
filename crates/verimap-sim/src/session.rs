@@ -97,6 +97,13 @@ impl LocalSession {
         &self.authority
     }
 
+    /// The writer. The UI does not call this; the wasm tests commit a chunk
+    /// the bridge does not expose yet, so the view's chunk delta is covered.
+    #[doc(hidden)]
+    pub fn authority_mut(&mut self) -> &mut Authority {
+        &mut self.authority
+    }
+
     /// Observation counts so far.
     pub fn stats(&self) -> IngestStats {
         self.stats
