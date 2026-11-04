@@ -314,4 +314,14 @@ mod tests {
         let long = "x".repeat(SiteFrame::NAME_MAX_BYTES + 1);
         assert!(SiteFrame::new(id, &long, anchor, bounds).is_err());
     }
+
+    #[test]
+    fn bounds_debug_shows_each_axis() {
+        let b = SceneBounds::new((-1, 2), (3, 4), (5, 6)).unwrap();
+        let text = format!("{b:?}");
+        assert!(text.contains("x: (-1, 2)"), "{text}");
+        assert!(text.contains("y: (3, 4)"), "{text}");
+        assert!(text.contains("z: (5, 6)"), "{text}");
+        assert_eq!(b, SceneBounds::new((-1, 2), (3, 4), (5, 6)).unwrap());
+    }
 }

@@ -105,6 +105,16 @@ mod tests {
     }
 
     #[test]
+    fn a_degenerate_loop_stays_on_the_first_corner() {
+        let path = LoopPath {
+            corners: [(7, 9), (7, 9), (7, 9), (7, 9)],
+            speed_mm_per_tick: 500,
+        };
+        assert_eq!(path.position(0), (7, 9));
+        assert_eq!(path.position(4), (7, 9));
+    }
+
+    #[test]
     fn occluded_for_eight_seconds_per_lap() {
         let t = Truth::demo();
         let hidden = (0..800)
