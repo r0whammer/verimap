@@ -1,5 +1,11 @@
 # VeriMap
 
+[![CI](https://github.com/r0whammer/verimap/actions/workflows/verify.yml/badge.svg)](https://github.com/r0whammer/verimap/actions/workflows/verify.yml)
+[![line coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/r0whammer/verimap/main/docs/badges/coverage.json)](docs/status.md)
+[![kernel proofs](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/r0whammer/verimap/main/docs/badges/proofs.json)](docs/verification.md)
+[![Lean](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/r0whammer/verimap/main/docs/badges/lean.json)](proofs/lean-toolchain)
+[![license](https://img.shields.io/github/license/r0whammer/verimap)](LICENSE)
+
 Interactive 2D/3D mapping with incremental, sensor-driven updates. An
 operator explores a scene, inspects detected entities, edits annotations and
 map geometry, and sees what changed, when, and why. The first target is a
@@ -14,6 +20,15 @@ replay in the browser, on desktops and touchscreen phones.
 - **React + CesiumJS** handle presentation only, with one engine for 2D and
   3D.
 - **Nix flakes** pin the toolchain.
+
+The CI badge is the verify workflow. The coverage, kernel-proof, and Lean
+badges read [`docs/badges/`](docs/badges/). `just coverage` fails if the
+coverage message is not the measured production-Rust line percentage, and
+`just audit` fails if the proof message is not `N/N` for the kernel's N
+public functions, if any ledger row is still `proof pending` or
+`model generated`, or if the Lean message is not the pin in
+[`proofs/lean-toolchain`](proofs/lean-toolchain). No external coverage
+service is configured.
 
 This is early work. [`docs/status.md`](docs/status.md) is the only place that
 records what works. [`CLAUDE.md`](CLAUDE.md) is the specification, not a list

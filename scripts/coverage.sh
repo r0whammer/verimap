@@ -50,7 +50,10 @@ done
   --ignore-filename-regex='(/rustc/|/cargo/registry/|/cargo/git/)' \
   > "$outdir/verimap.lcov"
 
-python3 "$root/scripts/coverage-gate.py" "$outdir/verimap.lcov"
+python3 "$root/scripts/coverage-gate.py" "$outdir/verimap.lcov" | tee "$outdir/gate.txt"
 
 cd "$root/web"
 pnpm exec vitest run --coverage
+
+cd "$root"
+scripts/check-badges.sh coverage
