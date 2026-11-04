@@ -113,6 +113,9 @@ jobs:
       - name: Rust and web tests
         run: nix develop --no-update-lock-file --command just test
 
+      - name: Coverage gates
+        run: nix develop --no-update-lock-file --command just coverage
+
       - name: Generated model, schemas, and types are up to date
         run: nix develop --no-update-lock-file --command just check-generated
 

@@ -258,9 +258,12 @@ impl Authority {
                 position,
             } => {
                 check_base(&id, store.annotation_slot(&id), base_revision)?;
-                let Some((_, current)) = store.annotation(&id) else {
-                    return Err(CommandError::NotFound { id });
-                };
+                // `check_base` succeeds only for a live slot, and a live slot
+                // stores the annotation. A miss is a broken invariant.
+                #[allow(clippy::expect_used)]
+                let (_, current) = store
+                    .annotation(&id)
+                    .expect("base revision matched a live annotation");
                 let label = label.unwrap_or_else(|| current.label().to_owned());
                 let (position, placement) =
                     position.unwrap_or((*current.position(), current.placement()));
@@ -359,4 +362,69 @@ fn allocate(
         }
     }
     Err(CommandError::IdSpaceExhausted)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{DomainError, GeodeticAnchor, ObjectId, SceneBounds, SiteFrame, SiteId};
+
+    fn site() -> SiteFrame {
+        SiteFrame::new(
+            SiteId::new("s").unwrap(),
+            "Site",
+            GeodeticAnchor::new(1.0, 2.0, 0.0).unwrap(),
+            SceneBounds::new((-1_000, 1_000), (-1_000, 1_000), (-1_000, 1_000)).unwrap(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn exhausted_sequence_commits_nothing() {
+        let mut a = Authority::new(site(), 1, 4);
+        crate::store::tests::exhaust_sequence(&mut a.store);
+        let before = a.store.clone();
+        assert_eq!(
+            a.submit(Command::AdvanceClock { to_tick: 1 }),
+            Err(CommandError::SequenceExhausted)
+        );
+        assert!(a.journal().is_empty());
+        assert_eq!(a.store, before);
+    }
+
+    #[test]
+    fn id_space_reports_exhaustion_without_allocating() {
+        assert_eq!(
+            allocate("trk", usize::MAX, |_| Slot::Vacant).unwrap_err(),
+            CommandError::IdSpaceExhausted
+        );
+        // Every candidate in the search window is taken.
+        assert_eq!(
+            allocate("trk", 2, |_| Slot::Deleted { revision: 1 }).unwrap_err(),
+            CommandError::IdSpaceExhausted
+        );
+    }
+
+    #[test]
+    fn errors_explain_themselves() {
+        let id = ObjectId::parse("id", "op:1").unwrap();
+        let samples = [
+            CommandError::from(DomainError::NonFinite { field: "z" }),
+            CommandError::NotFound { id: id.clone() },
+            CommandError::Deleted { id: id.clone() },
+            CommandError::PreconditionFailed {
+                id: id.clone(),
+                base_revision: 1,
+                current: 4,
+            },
+            CommandError::NothingToChange,
+            CommandError::JournalFull { limit: 3 },
+            CommandError::SequenceExhausted,
+            CommandError::IdSpaceExhausted,
+            CommandError::Rejected(ApplyError::SequenceExhausted),
+        ];
+        for e in samples {
+            assert!(!e.to_string().is_empty(), "{e:?}");
+        }
+    }
 }

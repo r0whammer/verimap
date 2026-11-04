@@ -35,7 +35,8 @@
           # The Rust toolchain Charon is built with, plus rust-analyzer and the
           # browser target. One compiler for native, WASM, and extraction.
           rustToolchain = aeneas.inputs.charon.packages.${system}.rustToolchain.override (old: {
-            extensions = (old.extensions or [ ]) ++ [ "rust-analyzer" ];
+            # llvm-tools: llvm-profdata and llvm-cov for `just coverage`.
+            extensions = (old.extensions or [ ]) ++ [ "rust-analyzer" "llvm-tools" ];
             targets = (old.targets or [ ]) ++ [ "wasm32-unknown-unknown" ];
           });
           # Must equal the `wasm-bindgen` crate version in Cargo.lock

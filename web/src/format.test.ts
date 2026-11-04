@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decimal1, metres, metres1, percent, sceneTime, smallNumber } from './format.ts';
+import { decimal1, degrees, metres, metres1, percent, sceneTime, smallNumber } from './format.ts';
 
 describe('format', () => {
   it('formats lengths and percentages', () => {
@@ -8,6 +8,8 @@ describe('format', () => {
     expect(metres1(-12_345)).toBe('-12.3 m');
     expect(percent(8750)).toBe('87.5 %');
     expect(decimal1(-12.345)).toBe('-12.3');
+    expect(degrees(-98.35)).toBe('-98.350000°');
+    expect(degrees(0)).toBe('0.000000°');
   });
 
   it('formats scene time exactly, beyond 2^53 ticks', () => {

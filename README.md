@@ -84,6 +84,7 @@ Run inside `nix develop`. Run `just` to list recipes.
 | `just fmt` / `just fmt-check` | Rust, Nix, and web formatting | yes |
 | `just lint` | Clippy (native and wasm32), `tsc -b`, ESLint | yes |
 | `just test` | Rust tests (including property tests) and Vitest | yes |
+| `just coverage` | Production Rust line coverage, and 100% line/branch coverage of the pure web modules | yes |
 | `just test-wasm` | Shared-core fixtures in a real browser WASM runtime | **not yet** |
 | `just e2e` | Playwright against a production build (desktop and emulated mobile Chromium) | yes |
 | `just gen` | Regenerate `schemas/` and `web/src/generated/` from `verimap-protocol` | yes |
@@ -92,7 +93,7 @@ Run inside `nix develop`. Run `just` to list recipes.
 | `just check-generated` | Fail on stale, edited, missing, extra, or untracked generated files | yes |
 | `just toolchain-check` | Exact-match tool pairs agree (wasm-bindgen, Playwright, Lean/Aeneas) | yes |
 | `just bench` | Reference scenario with machine-readable measurements | **not yet** |
-| `just verify` | Every available check above, plus `e2e` | yes |
+| `just verify` | Every available check above, including coverage, plus `e2e` | yes |
 
 `just verify` does not include `demo-lan`, `test-wasm`, or `bench` until
 those recipes exist.

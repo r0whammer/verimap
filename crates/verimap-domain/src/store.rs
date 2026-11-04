@@ -487,3 +487,257 @@ fn refused(id: &ObjectId, decision: Decision) -> ApplyError {
         refusal,
     }
 }
+
+#[cfg(test)]
+pub(crate) mod tests {
+    /// Pose `store` at the last representable sequence so the next commit
+    /// reports exhaustion. Only tests should do this.
+    pub(crate) fn exhaust_sequence(store: &mut SceneStore) {
+        store.last_sequence = u64::MAX;
+    }
+
+    use super::*;
+    use crate::{
+        Annotation, Confidence, Entity, EntityClass, EventPayload, GeodeticAnchor, ObjectId,
+        ObservationRef, Placement, Provenance, SceneBounds, ScenePoint, SiteFrame, SiteId,
+        SourceId, TrackFix, Uncertainty,
+    };
+    use verimap_kernel::Decision;
+
+    fn site() -> SiteFrame {
+        SiteFrame::new(
+            SiteId::new("s").unwrap(),
+            "Site",
+            GeodeticAnchor::new(1.0, 2.0, 0.0).unwrap(),
+            SceneBounds::new((-100_000, 100_000), (-100_000, 100_000), (-20_000, 80_000)).unwrap(),
+        )
+        .unwrap()
+    }
+
+    fn source(sequence: u64) -> ObservationRef {
+        ObservationRef {
+            source: SourceId::new("s", "cam").unwrap(),
+            sequence,
+        }
+    }
+
+    fn fix(tick: u64, x_mm: i64) -> TrackFix {
+        TrackFix {
+            acquired_tick: tick,
+            position: ScenePoint::new(x_mm, 0, 0).unwrap(),
+            uncertainty: Uncertainty::new(1_000).unwrap(),
+            confidence: Confidence::new(5_000).unwrap(),
+        }
+    }
+
+    fn id(s: &str) -> ObjectId {
+        ObjectId::parse("id", s).unwrap()
+    }
+
+    fn observe(
+        seq: u64,
+        tick: u64,
+        track: &str,
+        at: TrackFix,
+        src: ObservationRef,
+    ) -> CommittedEvent {
+        CommittedEvent {
+            epoch: 1,
+            sequence: seq,
+            tick,
+            provenance: Provenance::Observation(src),
+            payload: EventPayload::EntityObserved {
+                id: id(track),
+                class: EntityClass::Vehicle,
+                fix: at,
+            },
+        }
+    }
+
+    #[test]
+    fn wrong_time_and_exhausted_sequence_change_nothing() {
+        let mut store = SceneStore::new(site(), 1);
+        let before = store.clone();
+        let clock = CommittedEvent {
+            epoch: 1,
+            sequence: 1,
+            tick: 0,
+            provenance: Provenance::Clock,
+            payload: EventPayload::ClockAdvanced { to_tick: 5 },
+        };
+        assert_eq!(
+            store.apply(&clock),
+            Err(ApplyError::WrongTime {
+                expected: 5,
+                found: 0
+            })
+        );
+        let early = observe(1, 3, "trk:1", fix(0, 0), source(1));
+        assert_eq!(
+            store.apply(&early),
+            Err(ApplyError::WrongTime {
+                expected: 0,
+                found: 3
+            })
+        );
+        store.last_sequence = u64::MAX;
+        assert_eq!(store.apply(&clock), Err(ApplyError::SequenceExhausted));
+        store.last_sequence = before.last_sequence;
+        assert_eq!(store, before);
+    }
+
+    #[test]
+    fn same_revision_and_missing_deletes_are_refused() {
+        let mut store = SceneStore::new(site(), 1);
+        let src = source(1);
+        let at = fix(0, 0);
+        let entity = Entity::new(id("trk:1"), EntityClass::Vehicle, at, src.clone(), 1);
+        store.entities.insert(
+            id("trk:1"),
+            Record::Live {
+                revision: 1,
+                value: entity,
+            },
+        );
+        let duplicate = observe(1, 0, "trk:1", at, src.clone());
+        assert_eq!(
+            store.apply(&duplicate),
+            Err(ApplyError::Refused {
+                id: id("trk:1"),
+                refusal: Refusal::Duplicate
+            })
+        );
+        let conflict = observe(1, 0, "trk:1", fix(0, 500), src);
+        assert_eq!(
+            store.apply(&conflict),
+            Err(ApplyError::Refused {
+                id: id("trk:1"),
+                refusal: Refusal::Conflict
+            })
+        );
+
+        store.entities.insert(
+            id("trk:2"),
+            Record::Live {
+                revision: 9,
+                value: Entity::new(id("trk:2"), EntityClass::Vehicle, fix(0, 0), source(2), 9),
+            },
+        );
+        let stale = observe(1, 0, "trk:2", fix(0, 0), source(2));
+        assert_eq!(
+            store.apply(&stale),
+            Err(ApplyError::Refused {
+                id: id("trk:2"),
+                refusal: Refusal::Stale
+            })
+        );
+
+        let missing = CommittedEvent {
+            epoch: 1,
+            sequence: 1,
+            tick: 0,
+            provenance: Provenance::Operator,
+            payload: EventPayload::EntityRemoved { id: id("trk:9") },
+        };
+        assert_eq!(
+            store.apply(&missing),
+            Err(ApplyError::Refused {
+                id: id("trk:9"),
+                refusal: Refusal::Missing
+            })
+        );
+        let marker = Annotation::marker(
+            id("op:1"),
+            "Gate",
+            ScenePoint::new(0, 0, 4_000).unwrap(),
+            Placement::GroundPlane,
+        )
+        .unwrap();
+        let gone = CommittedEvent {
+            epoch: 1,
+            sequence: 1,
+            tick: 0,
+            provenance: Provenance::Operator,
+            payload: EventPayload::AnnotationDeleted { id: id("op:9") },
+        };
+        assert_eq!(
+            store.apply(&gone),
+            Err(ApplyError::Refused {
+                id: id("op:9"),
+                refusal: Refusal::Missing
+            })
+        );
+        store.annotations.insert(
+            id("op:1"),
+            Record::Live {
+                revision: 1,
+                value: marker.clone(),
+            },
+        );
+        let again = CommittedEvent {
+            epoch: 1,
+            sequence: 1,
+            tick: 0,
+            provenance: Provenance::Operator,
+            payload: EventPayload::AnnotationPut { annotation: marker },
+        };
+        assert_eq!(
+            store.apply(&again),
+            Err(ApplyError::Refused {
+                id: id("op:1"),
+                refusal: Refusal::Duplicate
+            })
+        );
+        assert_eq!(store.last_sequence(), 0);
+        // The kernel pairs Apply with a new slot. This arm is the fallback
+        // if that pairing is ever broken.
+        assert_eq!(
+            refused(&id("trk:1"), Decision::Apply),
+            ApplyError::Refused {
+                id: id("trk:1"),
+                refusal: Refusal::Conflict
+            }
+        );
+    }
+
+    #[test]
+    fn changes_merge_and_errors_explain_themselves() {
+        let mut c = Changes::default();
+        assert!(c.is_empty());
+        c.merge(Changes {
+            clock: true,
+            entities: BTreeSet::from([id("trk:1")]),
+            annotations: BTreeSet::from([id("op:1")]),
+        });
+        assert!(!c.is_empty());
+        let samples = [
+            ApplyError::EpochMismatch {
+                expected: 1,
+                found: 2,
+            },
+            ApplyError::AlreadyApplied { sequence: 4 },
+            ApplyError::SequenceGap {
+                expected: 5,
+                found: 8,
+            },
+            ApplyError::SequenceExhausted,
+            ApplyError::WrongTime {
+                expected: 1,
+                found: 0,
+            },
+            ApplyError::ClockNotAdvanced { tick: 3 },
+            ApplyError::ProvenanceMismatch,
+            ApplyError::ObservedInFuture { id: id("trk:1") },
+            ApplyError::LateObservation { id: id("trk:1") },
+            ApplyError::ClassChanged { id: id("trk:1") },
+            ApplyError::OutsideSite { id: id("trk:1") },
+            ApplyError::Refused {
+                id: id("trk:1"),
+                refusal: Refusal::Tombstoned,
+            },
+        ];
+        for e in samples {
+            assert!(!e.to_string().is_empty(), "{e:?}");
+        }
+    }
+}

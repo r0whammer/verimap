@@ -103,6 +103,15 @@ mod tests {
     }
 
     #[test]
+    fn source_ids_are_slugs() {
+        let id = SourceId::new("source", "cam-1").unwrap();
+        assert_eq!(id.as_str(), "cam-1");
+        assert_eq!(id.to_string(), "cam-1");
+        assert!(SourceId::new("source", "").is_err());
+        assert!(SourceId::new("source", &"a".repeat(SourceId::MAX_BYTES + 1)).is_err());
+    }
+
+    #[test]
     fn ids_order_by_text() {
         let a = ObjectId::parse("id", "trk:10").unwrap();
         let b = ObjectId::parse("id", "trk:9").unwrap();

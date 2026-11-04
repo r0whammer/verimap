@@ -351,3 +351,31 @@ pub struct SessionDto {
     /// Ticks without observation before a track is expired.
     pub expire_after_ticks: u32,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use verimap_domain::{EntityClass, Freshness, Placement};
+
+    #[test]
+    fn class_and_freshness_use_stable_names() {
+        for class in EntityClass::ALL {
+            let dto = EntityClassDto::from(class);
+            let json = serde_json::to_string(&dto).unwrap();
+            assert_eq!(json, format!("\"{}\"", class.as_str()));
+            assert_eq!(serde_json::from_str::<EntityClassDto>(&json).unwrap(), dto);
+        }
+        for (freshness, name) in [
+            (Freshness::Active, "active"),
+            (Freshness::Stale, "stale"),
+            (Freshness::Expired, "expired"),
+        ] {
+            let dto = FreshnessDto::from(freshness);
+            assert_eq!(serde_json::to_string(&dto).unwrap(), format!("\"{name}\""));
+        }
+        assert_eq!(
+            Placement::from(PlacementDto::from(Placement::GroundPlane)),
+            Placement::GroundPlane
+        );
+    }
+}

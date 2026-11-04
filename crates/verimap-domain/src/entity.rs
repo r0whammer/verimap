@@ -338,4 +338,18 @@ mod tests {
         assert_eq!(e.history().next().map(|h| h.fix.acquired_tick), Some(24));
         assert_eq!(e.last_observed_tick(), 39);
     }
+
+    #[test]
+    fn class_and_freshness_names_are_stable() {
+        let names: Vec<_> = EntityClass::ALL.iter().map(|c| c.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "person", "animal", "vehicle", "building", "obstacle", "sensor", "unknown"
+            ]
+        );
+        assert_eq!(Freshness::Active.as_str(), "active");
+        assert_eq!(Freshness::Stale.as_str(), "stale");
+        assert_eq!(Freshness::Expired.as_str(), "expired");
+    }
 }
