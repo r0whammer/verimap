@@ -1,7 +1,7 @@
 //! Cell and chunk indexing. Negative coordinates use floor division:
 //! −1 mm is cell −1, and cell −1 is the last cell of chunk −1.
 
-#![allow(clippy::panic)]
+#![allow(clippy::expect_used, clippy::panic)]
 
 use proptest::prelude::*;
 use verimap_kernel::{
