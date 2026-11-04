@@ -35,6 +35,44 @@ offers wasm-bindgen-cli up to 0.2.104 and Playwright 1.54.
   exists: `wasm-bindgen` crate ⇔ `wasm-bindgen-cli_0_2_126`;
   `@playwright/test` ⇔ `playwright-driver`.
 
+## Binary cache downloads
+
+Charon and its Rust nightly are published to `https://hacl.cachix.org` by
+upstream CI. `flake.nix` `nixConfig` adds that substituter and its public
+key, and sets `http2 = false` and `fallback = true`.
+
+`http2 = false` is there because of a failure mode in Nix 2.35 (Determinate
+Nix 3.24), reproduced against `cache.nixos.org` on 2026-11-04:
+
+1. A parallel HTTP/2 download dies with curl error 55, "Failed sending data
+   to the peer", after Nix has already counted every byte. The object in
+   the log was `python3-3.14.6`, nar
+   `15kcy3p7fg0bzwzdlfw6l0qiwbw0wgr8sq53a879s354b2l917qb.nar.zst`.
+2. Nix resumes with `Range: bytes=60409648-`. That offset is the object's
+   `Content-Length`, so it starts one byte past EOF.
+3. Fastly/S3 answers **416** with `content-range: bytes */60409648`. A range
+   that ends on the last byte (`60409647-60409647`) answers 206, and a fresh
+   GET returns 200 with exactly 60409648 bytes. Nothing in `flake.lock` was
+   missing or hash-mismatched, and no partial nar was left in the store.
+4. With `fallback` left at its default `false`, Nix then stops:
+   `path ... is required, but there is no substituter that can build it`.
+
+`http2` is a restricted setting. An untrusted user of a multi-user daemon
+sees `ignoring the client-specified setting 'http2'` and the daemon keeps
+HTTP/2. Those installs need the same two lines in the daemon `nix.conf`:
+
+```
+http2 = false
+fallback = true
+extra-substituters = https://hacl.cachix.org
+extra-trusted-public-keys = hacl.cachix.org-1:FzsZ2xsByOwKwIWNPII7yMOelJNDZ12mDAj3d1eGX0c=
+```
+
+`fallback = true` is what still saves the shell if a substitute fails:
+Nix builds that path instead of aborting. `--fallback` on the command line
+is not restricted in the same way. CI sets all four lines in the runner's
+`nix.conf` before the daemon starts, and passes `--accept-flake-config`.
+
 ## Consequences
 
 - Upgrading Aeneas means: update the lock, `just init-proofs`, `lake update`
