@@ -1,0 +1,17 @@
+[package]
+name = "verimap-geometry"
+description = "Named frames and versioned T_parent_from_child transforms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Floating-point transforms stay outside the extracted kernel. No domain
+# types: a missing transform is an error here, before any scene mutation.
+[dependencies]
+
+[dev-dependencies]
+proptest = "1"
+
+[lints]
+workspace = true

@@ -158,7 +158,16 @@ every public kernel function is named in
 named. The kernel source did not change, so the previously checked proofs
 still apply.
 
+## M2 — Actual map changes (in progress)
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Geometry: named frames, versioned `T_parent_from_child`, unit-quaternion tolerance | done, tested | `crates/verimap-geometry`; docs/coordinates.md. Outside the proof boundary (f64). Round trip and an independent +90° yaw fixture |
+
+Chunk state, pose/camera/LiDAR sources, surface rendering, and the rest of
+M2 are not started. Issues #1 and #3–#13.
+
 ## Not started
 
-M2 map changes, M3 resilient demo, M4 gateway, M5 real data. Unavailable
+M3 resilient demo, M4 gateway, M5 real data. Unavailable
 recipes: `just demo-lan`, `just test-wasm`, `just bench`.

@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/verimap-kernel",
     "crates/verimap-domain",
+    "crates/verimap-geometry",
     "crates/verimap-protocol",
     "crates/verimap-sim",
     "crates/verimap-wasm",

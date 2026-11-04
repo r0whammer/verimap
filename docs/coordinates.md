@@ -57,14 +57,32 @@ coordinates.
   scale with latitude, so a distance read off the 2D screen is not a
   measurement. 2D does not show height.
 
+## Sensor frames
+
+`verimap-geometry` holds named, versioned rigid transforms. It is outside
+the extracted kernel: every component is `f64`.
+
+- A transform is `T_parent_from_child`. It rotates a child-frame point into
+  the parent, then adds the child origin expressed in the parent, in metres.
+- Quaternions are `[x, y, z, w]`. A component that is not finite is rejected
+  before the norm is considered. The Euclidean norm must lie within
+  **1e-9** of 1 (`ROTATION_NORM_TOLERANCE`). Values in that closed band are
+  stored unchanged; they are not renormalized. `q` and `-q` are both
+  accepted.
+- `FrameRegistry` keys a transform by child frame and calibration version.
+  An unknown pair is `GeometryError::UnknownFrame` and yields no point, so
+  the caller can reject the observation before scene state changes. The same
+  registration again is a no-op; a different transform at the same key is
+  `FrameConflict` and leaves the registry as it was.
+- Composed rotations are products of accepted quaternions and are not
+  rechecked. Round-trip tests use an absolute tolerance of `1e-8` m on
+  points within a kilometre of the origin with metre-scale translations.
+
 ## Specified, not yet implemented
 
 These come from CLAUDE.md §5 and are listed here so the first code that uses
 them matches:
 
-- Sensor frames: named, versioned transforms `T_parent_from_child`;
-  quaternions `[x, y, z, w]`, with invalid rotations rejected at a
-  documented normalization tolerance. All transforms use f64.
 - Surface chunks: 32 × 32 cells at 1 m. Cell and chunk indices will use
   floor division, so −1 mm falls in cell −1, not cell 0. The rounding rule
   for converting f64 metres to millimetres will be documented with the code.
