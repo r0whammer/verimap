@@ -6,8 +6,8 @@ use verimap_protocol::bridge::{
     CoreEvent, ErrorCode, PlacedPointDto, RequestError, UiRequest, parse_request,
 };
 use verimap_protocol::scene::{
-    AnnotationDto, EntityDetailDto, EntityDto, FixDto, IngestStatsDto, ProblemDto, SceneUpdateDto,
-    SessionDto, TimelineDto, ViewModeDto,
+    AnnotationDto, ChunkDto, EntityDetailDto, EntityDto, FixDto, IngestStatsDto, ProblemDto,
+    SceneUpdateDto, SessionDto, TimelineDto, ViewModeDto, chunk_key,
 };
 use verimap_protocol::site::SiteDto;
 use verimap_protocol::{PROTOCOL_VERSION, ProtocolVersion, U64String};
@@ -288,6 +288,9 @@ fn command_code(e: &CommandError) -> ErrorCode {
         CommandError::NothingToChange
         | CommandError::IdSpaceExhausted
         | CommandError::Rejected(_) => ErrorCode::Rejected,
+        CommandError::ChunkNotFound { .. } => ErrorCode::NotFound,
+        CommandError::ChunkDeleted { .. } => ErrorCode::Deleted,
+        CommandError::ChunkPreconditionFailed { .. } => ErrorCode::PreconditionFailed,
     }
 }
 
@@ -358,6 +361,8 @@ fn full_update(live: &LocalSession, review: Option<&Review>) -> SceneUpdateDto {
             .map(|(r, a)| AnnotationDto::new(a, r))
             .collect(),
         removed_annotations: Vec::new(),
+        chunks: store.chunks().map(|(r, c)| ChunkDto::new(c, r)).collect(),
+        removed_chunks: Vec::new(),
         problem: None,
     }
 }
@@ -373,8 +378,16 @@ fn delta_update(live: &LocalSession, review: Option<&Review>, changes: &Changes)
         removed_entities: Vec::new(),
         annotations: Vec::new(),
         removed_annotations: Vec::new(),
+        chunks: Vec::new(),
+        removed_chunks: Vec::new(),
         problem: None,
     };
+    for id in &changes.chunks {
+        match store.chunk(id) {
+            Some((r, chunk)) => update.chunks.push(ChunkDto::new(chunk, r)),
+            None => update.removed_chunks.push(chunk_key(*id)),
+        }
+    }
     for id in &changes.entities {
         match store.entity(id) {
             Some((r, e)) => update.entities.push(EntityDto::new(e, r, store.tick())),
@@ -689,8 +702,9 @@ mod tests {
 
     #[test]
     fn error_mapping_covers_every_command_failure() {
-        use verimap_domain::{ApplyError, CommandError, ObjectId};
+        use verimap_domain::{ApplyError, ChunkId, CommandError, ObjectId};
         let id = ObjectId::parse("id", "op:1").unwrap();
+        let chunk = ChunkId::new(0, -1).unwrap();
         let samples = [
             CommandError::Invalid(verimap_domain::DomainError::NonFinite { field: "z" }),
             CommandError::NotFound { id: id.clone() },
@@ -705,6 +719,13 @@ mod tests {
             CommandError::SequenceExhausted,
             CommandError::IdSpaceExhausted,
             CommandError::Rejected(ApplyError::ProvenanceMismatch),
+            CommandError::ChunkNotFound { id: chunk },
+            CommandError::ChunkDeleted { id: chunk },
+            CommandError::ChunkPreconditionFailed {
+                id: chunk,
+                base_revision: 1,
+                current: 2,
+            },
         ];
         for e in samples {
             let mapped = command_error(e.clone());

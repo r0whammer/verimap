@@ -13,7 +13,7 @@ Every public function in `crates/verimap-kernel` is named in the table
 below, and `scripts/proof-inventory.sh` (run by `just audit`) fails if a
 new one is not. Accessors (`basis_points`, `min`, `max`) have no theorem
 of their own: the constructor and `contains` specs state the values they
-return. The current kernel has 11 public functions and 10 distinct names
+return. The current kernel has 15 public functions and 14 distinct names
 (`new` is shared by `Confidence` and `AxisBoundsMm`); every name is in the
 table. Nothing
 outside this crate is extracted, so proof coverage of the rest of the
@@ -53,6 +53,9 @@ accuracy, geodesy, rendering, persistence, or the application as a whole.
 | 6 | Invalid update has no effect (whole command or event) | — (the store's plan-then-apply is not in the kernel) | — | — | — | — | not modeled | — |
 | 7 | The authority sequence step is `last + 1` below `u64::MAX` and reports `SequenceExhausted` at the maximum; it never wraps | `verimap_kernel::next_sequence` | `VeriMap.next_sequence` | none | `Revisions.lean`: `next_sequence_spec` | none | proof checked | see below |
 | 8 | An edit's base revision matches exactly when the object is live at that revision | `verimap_kernel::base_revision_matches` | `VeriMap.base_revision_matches` | none | `Revisions.lean`: `base_revision_matches_spec` | none | proof checked | see below |
+| 9a | `cell_index` is floor division by 1 m inside ±100 km and `CoordinateOutOfRange` outside; an accepted index lies in `[cellIndexMin, cellIndexMax]`; never panics | `verimap_kernel::cell_index` | `VeriMap.cell_index` | none (all `i64`) | `Cells.lean`: `cell_index_spec`, `cell_index_in_range` | Lean `/` on `Int` is floor division; the proof relates it to Rust's truncating division | proof checked | see below |
+| 9b | `chunk_cell` splits an in-range cell into `chunk * 32 + local` with `local` in `0..32`, using floor division so negative cells stay in negative chunks; out-of-range cells are `CoordinateOutOfRange`; never panics | `verimap_kernel::chunk_cell` | `VeriMap.chunk_cell` | cell index, not an arbitrary `i64` scene coordinate | `Cells.lean`: `chunk_cell_spec` | same floor/truncation relation as 9a | proof checked | see below |
+| 9c | `ChunkCell::chunk` and `ChunkCell::local` return the two fields of the value `chunk_cell` built | `verimap_kernel::ChunkCell::chunk`, `verimap_kernel::ChunkCell::local` | `VeriMap.ChunkCell.impl.chunk`, `VeriMap.ChunkCell.impl.local` | none | `Cells.lean`: `ChunkCell.chunk_spec`, `ChunkCell.local_spec` | none | proof checked | see below |
 
 Rows 1a–1d are the "validated values satisfy declared bounds" property for
 scalar guards. They do not by themselves prove that scene state only holds
@@ -80,7 +83,10 @@ not modeled.
 that follows `fc7a3a1`. On 2026-10-25, `just verify` checked rows 1a–8 on
 that commit's tree. It regenerated the model from the current kernel,
 built it with `lake build`, and audited 92 theorems, auxiliary lemmas
-included.
+included. Rows 9a–9c were added with the surface-cell indexing functions.
+`lake build` and `just audit` on that change checked 172 theorems,
+auxiliary lemmas included, and found only `propext`, `Classical.choice`,
+and `Quot.sound`.
 
 Mutation check (2026-10-25): a planted resurrection bug in `slot_upsert`
 applied a newer upsert over a tombstone. After regeneration, `lake build`

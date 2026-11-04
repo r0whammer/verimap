@@ -226,6 +226,10 @@ export interface SceneUpdateDto {
    */
   annotations: AnnotationDto[];
   /**
+   * Surface chunks added or replaced.
+   */
+  chunks: ChunkDto[];
+  /**
    * Tracks added or changed.
    */
   entities: EntityDto[];
@@ -238,6 +242,10 @@ export interface SceneUpdateDto {
    * Annotation IDs no longer present.
    */
   removed_annotations: string[];
+  /**
+   * Chunk ids no longer present, `ix,iy`.
+   */
+  removed_chunks: string[];
   /**
    * Track IDs no longer present (deleted, or absent in a review state).
    */
@@ -289,6 +297,52 @@ export interface PointMmDto {
    * Up.
    */
   z_mm: number;
+}
+/**
+ * A 32 × 32 surface chunk in the scene frame.
+ *
+ * This interface was referenced by `WorkerBridge`'s JSON-Schema
+ * via the `definition` "ChunkDto".
+ */
+export interface ChunkDto {
+  /**
+   * Row-major cells, 32 × 32. A height grid does not represent overhangs.
+   */
+  cells: CellDto[];
+  /**
+   * `ix,iy`, the key the view uses to upsert the chunk.
+   */
+  id: string;
+  /**
+   * Easting chunk index. Negative is west of the anchor.
+   */
+  ix: number;
+  /**
+   * Northing chunk index.
+   */
+  iy: number;
+  revision: U64String;
+}
+/**
+ * One reconstructed cell. Unknown cells have `known: false`, height 0, and
+ * occupancy 0. That is not the same as an observed empty cell.
+ *
+ * This interface was referenced by `WorkerBridge`'s JSON-Schema
+ * via the `definition` "CellDto".
+ */
+export interface CellDto {
+  /**
+   * Height above the anchor, millimetres. Zero when unknown.
+   */
+  height_mm: number;
+  /**
+   * Whether a sensor has reported this cell.
+   */
+  known: boolean;
+  /**
+   * Occupancy in basis points. Zero when unknown or observed empty.
+   */
+  occupancy_bp: number;
 }
 /**
  * A track as the map shows it.
@@ -537,4 +591,4 @@ export interface PointMDto {
 }
 
 /** Protocol version of the Rust core these types were generated from. */
-export const PROTOCOL_VERSION: ProtocolVersion = { major: 0, minor: 2 };
+export const PROTOCOL_VERSION: ProtocolVersion = { major: 0, minor: 3 };

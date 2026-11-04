@@ -71,4 +71,11 @@ structure Transition where
   decision : Decision
   slot : Slot
 
+/-- [verimap_kernel::ChunkCell]
+    Source: 'crates/verimap-kernel/src/lib.rs', lines 310:0-313:1
+    Visibility: public -/
+structure ChunkCell where
+  chunk : Std.I64
+  «local» : Std.I64
+
 end VeriMap

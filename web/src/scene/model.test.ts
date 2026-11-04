@@ -43,6 +43,8 @@ function update(partial: Partial<SceneUpdateDto>): SceneUpdateDto {
     removed_entities: [],
     annotations: [],
     removed_annotations: [],
+    chunks: [],
+    removed_chunks: [],
     problem: null,
     ...partial,
   };

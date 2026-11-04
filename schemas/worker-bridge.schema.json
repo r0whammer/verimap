@@ -19,7 +19,7 @@
   ],
   "x-verimap-protocol-version": {
     "major": 0,
-    "minor": 2
+    "minor": 3
   },
   "$defs": {
     "AnnotationDto": {
@@ -79,6 +79,75 @@
       "required": [
         "min_mm",
         "max_mm"
+      ]
+    },
+    "CellDto": {
+      "description": "One reconstructed cell. Unknown cells have `known: false`, height 0, and\noccupancy 0. That is not the same as an observed empty cell.",
+      "type": "object",
+      "properties": {
+        "height_mm": {
+          "description": "Height above the anchor, millimetres. Zero when unknown.",
+          "type": "integer",
+          "format": "int32",
+          "maximum": 100000000,
+          "minimum": -100000000
+        },
+        "known": {
+          "description": "Whether a sensor has reported this cell.",
+          "type": "boolean"
+        },
+        "occupancy_bp": {
+          "description": "Occupancy in basis points. Zero when unknown or observed empty.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 10000,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "height_mm",
+        "occupancy_bp",
+        "known"
+      ]
+    },
+    "ChunkDto": {
+      "description": "A 32 × 32 surface chunk in the scene frame.",
+      "type": "object",
+      "properties": {
+        "cells": {
+          "description": "Row-major cells, 32 × 32. A height grid does not represent overhangs.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CellDto"
+          }
+        },
+        "id": {
+          "description": "`ix,iy`, the key the view uses to upsert the chunk.",
+          "type": "string"
+        },
+        "ix": {
+          "description": "Easting chunk index. Negative is west of the anchor.",
+          "type": "integer",
+          "format": "int32"
+        },
+        "iy": {
+          "description": "Northing chunk index.",
+          "type": "integer",
+          "format": "int32"
+        },
+        "revision": {
+          "description": "Sequence of the event that wrote the chunk.",
+          "$ref": "#/$defs/U64String"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "ix",
+        "iy",
+        "revision",
+        "cells"
       ]
     },
     "CoreEvent": {
@@ -694,6 +763,13 @@
             "$ref": "#/$defs/AnnotationDto"
           }
         },
+        "chunks": {
+          "description": "Surface chunks added or replaced.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChunkDto"
+          }
+        },
         "entities": {
           "description": "Tracks added or changed.",
           "type": "array",
@@ -714,6 +790,13 @@
         },
         "removed_annotations": {
           "description": "Annotation IDs no longer present.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "removed_chunks": {
+          "description": "Chunk ids no longer present, `ix,iy`.",
           "type": "array",
           "items": {
             "type": "string"
@@ -747,7 +830,9 @@
         "entities",
         "removed_entities",
         "annotations",
-        "removed_annotations"
+        "removed_annotations",
+        "chunks",
+        "removed_chunks"
       ]
     },
     "SessionDto": {

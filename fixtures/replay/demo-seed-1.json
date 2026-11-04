@@ -2,22 +2,22 @@
   "checkpoints": [
     {
       "last_sequence": 144,
-      "state_hash": "c9d0755700455374",
+      "state_hash": "08417174edbe0259",
       "tick": 100
     },
     {
       "last_sequence": 429,
-      "state_hash": "445c9821cc99a621",
+      "state_hash": "e50a3b2c297ad748",
       "tick": 300
     },
     {
       "last_sequence": 818,
-      "state_hash": "fdb6af50bd549a0b",
+      "state_hash": "f4884cf650d730fa",
       "tick": 600
     },
     {
       "last_sequence": 2218,
-      "state_hash": "4ab630ad1c9b69a2",
+      "state_hash": "bf32a9c80e7ebb17",
       "tick": 1600
     }
   ],

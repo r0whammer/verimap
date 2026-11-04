@@ -9,3 +9,5 @@ public import VeriMap.Spec.Bounds
 public import VeriMap.Properties.Guards
 public import VeriMap.Spec.Slots
 public import VeriMap.Properties.Revisions
+public import VeriMap.Spec.Cells
+public import VeriMap.Properties.Cells

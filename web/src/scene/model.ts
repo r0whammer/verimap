@@ -3,6 +3,7 @@
 // and this applies it (replace everything, or upsert/remove by ID).
 import type {
   AnnotationDto,
+  ChunkDto,
   EntityDto,
   IngestStatsDto,
   ProblemDto,
@@ -13,6 +14,7 @@ import type {
 export interface SceneSnapshot {
   readonly entities: ReadonlyMap<string, EntityDto>;
   readonly annotations: ReadonlyMap<string, AnnotationDto>;
+  readonly chunks: ReadonlyMap<string, ChunkDto>;
   readonly timeline: TimelineDto;
   readonly stats: IngestStatsDto;
   /** Set when the latest request stopped early; cleared by the next one. */
@@ -42,6 +44,7 @@ export function applyUpdate(previous: SceneSnapshot | null, update: SceneUpdateD
       update.annotations,
       update.removed_annotations,
     ),
+    chunks: merged(previous?.chunks, replace, update.chunks, update.removed_chunks),
     timeline: update.timeline,
     stats: update.stats,
     problem: update.problem ?? null,
@@ -59,6 +62,8 @@ export function replacingUpdate(snapshot: SceneSnapshot): SceneUpdateDto {
     removed_entities: [],
     annotations: [...snapshot.annotations.values()],
     removed_annotations: [],
+    chunks: [...snapshot.chunks.values()],
+    removed_chunks: [],
     problem: snapshot.problem,
   };
 }

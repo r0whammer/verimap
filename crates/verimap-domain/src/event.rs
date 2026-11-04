@@ -1,11 +1,11 @@
 //! Committed events: validated, sequenced state transitions. The journal of
 //! committed events is the replay source of truth.
 
-use crate::{Annotation, EntityClass, ObjectId, ObservationRef, TrackFix};
+use crate::{Annotation, ChunkId, EntityClass, ObjectId, ObservationRef, SurfaceChunk, TrackFix};
 
 /// Version of the committed-event format and reducer rules. A recorded
 /// journal from another version is rejected or migrated explicitly.
-pub const EVENT_SCHEMA_VERSION: u16 = 1;
+pub const EVENT_SCHEMA_VERSION: u16 = 2;
 
 /// Who or what caused an event.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,6 +49,17 @@ pub enum EventPayload {
     AnnotationDeleted {
         /// Annotation ID.
         id: ObjectId,
+    },
+    /// A surface chunk was replaced in full. The previous cells are kept
+    /// only if this event is refused.
+    ChunkReplaced {
+        /// The complete chunk.
+        chunk: SurfaceChunk,
+    },
+    /// A surface chunk was deleted. Its id stays tombstoned.
+    ChunkDeleted {
+        /// Chunk id.
+        id: ChunkId,
     },
 }
 
