@@ -7,6 +7,19 @@ is about the Aeneas model regenerated from the current Rust
 (`just check-generated`), is imported by `proofs/VeriMap.lean`, builds with
 `lake build`, and passes `just audit`.
 
+## Kernel proof coverage
+
+Every public function in `crates/verimap-kernel` is named in the table
+below, and `scripts/proof-inventory.sh` (run by `just audit`) fails if a
+new one is not. Accessors (`basis_points`, `min`, `max`) have no theorem
+of their own: the constructor and `contains` specs state the values they
+return. The current kernel has 11 public functions and 10 distinct names
+(`new` is shared by `Confidence` and `AxisBoundsMm`); every name is in the
+table. Nothing
+outside this crate is extracted, so proof coverage of the rest of the
+program is zero by the boundary in the next section, not by a missing
+theorem.
+
 ## Trust boundary
 
 A checked theorem states a property of the Lean model that Charon and Aeneas

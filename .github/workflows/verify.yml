@@ -49,8 +49,13 @@ jobs:
           # hacl.cachix.org: Charon and its Rust toolchain, published by
           # upstream CI.
           extra_nix_config: |
+            accept-flake-config = true
             extra-substituters = https://hacl.cachix.org
             extra-trusted-public-keys = hacl.cachix.org-1:FzsZ2xsByOwKwIWNPII7yMOelJNDZ12mDAj3d1eGX0c=
+            # Daemon-level: http2 is restricted, so a client flag is not enough.
+            # See docs/adr/0001-toolchain.md (Binary cache downloads).
+            http2 = false
+            fallback = true
 
       - name: Restore locally built Nix paths
         id: nix-local
@@ -73,7 +78,7 @@ jobs:
       # The profile pins the dev shell's closure so it can be cached below.
       - name: Build dev shell
         run: |
-          nix develop --no-update-lock-file --profile "$RUNNER_TEMP/dev-profile" \
+          nix develop --accept-flake-config --fallback --no-update-lock-file --profile "$RUNNER_TEMP/dev-profile" \
             --command true
 
       # Paths built on this runner carry no upstream signature. Export just
@@ -93,7 +98,7 @@ jobs:
 
       - name: Locate the pnpm store
         id: pnpm-store
-        run: echo "path=$(nix develop --no-update-lock-file --command pnpm store path)" >> "$GITHUB_OUTPUT"
+        run: echo "path=$(nix develop --accept-flake-config --fallback --no-update-lock-file --command pnpm store path)" >> "$GITHUB_OUTPUT"
 
       - name: Restore pnpm store
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -102,22 +107,25 @@ jobs:
           key: pnpm-store-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}
 
       - name: Exact-match tool pairs
-        run: nix develop --no-update-lock-file --command just toolchain-check
+        run: nix develop --accept-flake-config --fallback --no-update-lock-file --command just toolchain-check
 
       - name: Formatting
-        run: nix develop --no-update-lock-file --command just fmt-check
+        run: nix develop --accept-flake-config --fallback --no-update-lock-file --command just fmt-check
 
       - name: Lint (clippy native and wasm32, tsc, ESLint)
-        run: nix develop --no-update-lock-file --command just lint
+        run: nix develop --accept-flake-config --fallback --no-update-lock-file --command just lint
 
       - name: Rust and web tests
-        run: nix develop --no-update-lock-file --command just test
+        run: nix develop --accept-flake-config --fallback --no-update-lock-file --command just test
+
+      - name: Coverage gates
+        run: nix develop --accept-flake-config --fallback --no-update-lock-file --command just coverage
 
       - name: Generated model, schemas, and types are up to date
-        run: nix develop --no-update-lock-file --command just check-generated
+        run: nix develop --accept-flake-config --fallback --no-update-lock-file --command just check-generated
 
       - name: Fetch Mathlib build cache
-        run: nix develop --no-update-lock-file --command just proofs-cache
+        run: nix develop --accept-flake-config --fallback --no-update-lock-file --command just proofs-cache
 
       # Mathlib's build comes from `lake exe cache get`; the Aeneas Lean
       # library has no such cache, so keep its build output between runs.
@@ -129,10 +137,10 @@ jobs:
           key: aeneas-lean-${{ runner.os }}-${{ hashFiles('proofs/lean-toolchain', 'proofs/lake-manifest.json') }}
 
       - name: Check proofs and audit axioms and placeholders
-        run: nix develop --no-update-lock-file --command just audit
+        run: nix develop --accept-flake-config --fallback --no-update-lock-file --command just audit
 
       - name: Browser end-to-end tests
-        run: nix develop --no-update-lock-file --command just e2e
+        run: nix develop --accept-flake-config --fallback --no-update-lock-file --command just e2e
 
       - name: Upload Playwright report
         if: failure()

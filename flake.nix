@@ -1,6 +1,25 @@
 {
   description = "VeriMap: Rust domain + Charon/Aeneas/Lean proofs + WASM/React/Cesium web client";
 
+  # Applied with `nix develop --accept-flake-config` when the user is trusted
+  # (single-user Nix, or the user listed in trusted-users). On a multi-user
+  # daemon, restricted settings such as http2 are ignored unless they are in
+  # the daemon's nix.conf; see docs/adr/0001-toolchain.md.
+  nixConfig = {
+    extra-substituters = [ "https://hacl.cachix.org" ];
+    extra-trusted-public-keys = [
+      "hacl.cachix.org-1:FzsZ2xsByOwKwIWNPII7yMOelJNDZ12mDAj3d1eGX0c="
+    ];
+    # cache.nixos.org is Fastly in front of S3. Parallel HTTP/2 downloads
+    # often die with curl error 55 ("Failed sending data to the peer").
+    # Nix then resumes at the byte offset it reached. If that offset equals
+    # Content-Length, the CDN answers 416 and, without fallback, the whole
+    # shell fails even though the object is intact. HTTP/1.1 avoids the
+    # reset; fallback builds the path if a substitute still fails.
+    http2 = false;
+    fallback = true;
+  };
+
   inputs = {
     # Proof toolchain: Aeneas, the Charon it locks, and Charon's Rust nightly.
     # proofs/lakefile.toml must require the same Aeneas rev (just init-proofs).
@@ -35,7 +54,11 @@
           # The Rust toolchain Charon is built with, plus rust-analyzer and the
           # browser target. One compiler for native, WASM, and extraction.
           rustToolchain = aeneas.inputs.charon.packages.${system}.rustToolchain.override (old: {
-            extensions = (old.extensions or [ ]) ++ [ "rust-analyzer" ];
+            # llvm-tools: llvm-profdata and llvm-cov for `just coverage`.
+            extensions = (old.extensions or [ ]) ++ [
+              "rust-analyzer"
+              "llvm-tools"
+            ];
             targets = (old.targets or [ ]) ++ [ "wasm32-unknown-unknown" ];
           });
           # Must equal the `wasm-bindgen` crate version in Cargo.lock

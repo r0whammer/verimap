@@ -96,6 +96,8 @@ export class CoreBridge {
       this.#fail(`core worker error: ${event.message || 'unknown'}`);
     };
     this.#timer = setTimeout(() => {
+      // The handshake clears this timer, so it fires only while still starting.
+      /* v8 ignore else -- cleared before it can run once the core has answered */
       if (this.#status.state === 'starting') {
         this.#fail(`core did not answer within ${HANDSHAKE_TIMEOUT_MS / 1000} s`);
       }

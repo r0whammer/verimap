@@ -1,5 +1,11 @@
 # VeriMap
 
+[![CI](https://github.com/r0whammer/verimap/actions/workflows/verify.yml/badge.svg)](https://github.com/r0whammer/verimap/actions/workflows/verify.yml)
+[![line coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/r0whammer/verimap/main/docs/badges/coverage.json)](docs/status.md)
+[![kernel proofs](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/r0whammer/verimap/main/docs/badges/proofs.json)](docs/verification.md)
+[![Lean](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/r0whammer/verimap/main/docs/badges/lean.json)](proofs/lean-toolchain)
+[![license](https://img.shields.io/github/license/r0whammer/verimap)](LICENSE)
+
 Interactive 2D/3D mapping with incremental, sensor-driven updates. An
 operator explores a scene, inspects detected entities, edits annotations and
 map geometry, and sees what changed, when, and why. The first target is a
@@ -14,6 +20,15 @@ replay in the browser, on desktops and touchscreen phones.
 - **React + CesiumJS** handle presentation only, with one engine for 2D and
   3D.
 - **Nix flakes** pin the toolchain.
+
+The CI badge is the verify workflow. The coverage, kernel-proof, and Lean
+badges read [`docs/badges/`](docs/badges/). `just coverage` fails if the
+coverage message is not the measured production-Rust line percentage, and
+`just audit` fails if the proof message is not `N/N` for the kernel's N
+public functions, if any ledger row is still `proof pending` or
+`model generated`, or if the Lean message is not the pin in
+[`proofs/lean-toolchain`](proofs/lean-toolchain). No external coverage
+service is configured.
 
 This is early work. [`docs/status.md`](docs/status.md) is the only place that
 records what works. [`CLAUDE.md`](CLAUDE.md) is the specification, not a list
@@ -39,18 +54,28 @@ Pixel 7 emulation, not a real device.
 - Nix with flakes enabled (`experimental-features = nix-command flakes`).
 - Optional: [direnv](https://direnv.net/) to enter the shell on `cd`
   (`.envrc` is provided; run `direnv allow` once).
-- Optional: add the substituter `https://hacl.cachix.org` (public key
-  `hacl.cachix.org-1:FzsZ2xsByOwKwIWNPII7yMOelJNDZ12mDAj3d1eGX0c=`) to use
-  Charon's upstream binary cache instead of building it locally. CI does this.
+- On a multi-user Nix daemon, add this to the daemon's `nix.conf` and
+  restart it. `http2` and the cache public key are restricted: an untrusted
+  user cannot set them from the flake, and without them a cache resume can
+  fail the shell while Charon is built from source. See
+  [ADR 0001](docs/adr/0001-toolchain.md). CI writes the same lines into the
+  runner's `nix.conf`.
+
+  ```
+  http2 = false
+  fallback = true
+  extra-substituters = https://hacl.cachix.org
+  extra-trusted-public-keys = hacl.cachix.org-1:FzsZ2xsByOwKwIWNPII7yMOelJNDZ12mDAj3d1eGX0c=
+  ```
 
 Using the app needs only a current browser; it does not need Nix.
 
 ## First run
 
 ```sh
-nix develop            # or: direnv allow
-just proofs-cache      # once: fetch Mathlib's prebuilt Lean cache
-just dev               # http://127.0.0.1:5173
+nix develop --accept-flake-config   # or: direnv allow
+just proofs-cache                    # once: fetch Mathlib's prebuilt Lean cache
+just dev                             # http://127.0.0.1:5173
 ```
 
 The first run downloads, at the pinned versions:
@@ -84,6 +109,7 @@ Run inside `nix develop`. Run `just` to list recipes.
 | `just fmt` / `just fmt-check` | Rust, Nix, and web formatting | yes |
 | `just lint` | Clippy (native and wasm32), `tsc -b`, ESLint | yes |
 | `just test` | Rust tests (including property tests) and Vitest | yes |
+| `just coverage` | Production Rust line coverage, and 100% line/branch coverage of the pure web modules | yes |
 | `just test-wasm` | Shared-core fixtures in a real browser WASM runtime | **not yet** |
 | `just e2e` | Playwright against a production build (desktop and emulated mobile Chromium) | yes |
 | `just gen` | Regenerate `schemas/` and `web/src/generated/` from `verimap-protocol` | yes |
@@ -92,7 +118,7 @@ Run inside `nix develop`. Run `just` to list recipes.
 | `just check-generated` | Fail on stale, edited, missing, extra, or untracked generated files | yes |
 | `just toolchain-check` | Exact-match tool pairs agree (wasm-bindgen, Playwright, Lean/Aeneas) | yes |
 | `just bench` | Reference scenario with machine-readable measurements | **not yet** |
-| `just verify` | Every available check above, plus `e2e` | yes |
+| `just verify` | Every available check above, including coverage, plus `e2e` | yes |
 
 `just verify` does not include `demo-lan`, `test-wasm`, or `bench` until
 those recipes exist.

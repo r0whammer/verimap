@@ -186,3 +186,67 @@ impl LocalSession {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use verimap_domain::{EntityClass, ObservationPayload};
+
+    fn envelope(sequence: u64, acquired: u64, class: EntityClass) -> ObservationEnvelope {
+        ObservationEnvelope {
+            source_id: DETECTOR_SOURCE_ID.into(),
+            source_session: 1,
+            sequence,
+            acquired_tick: acquired,
+            clock_domain: SCENE_CLOCK_DOMAIN.into(),
+            received_tick: acquired,
+            frame_id: SCENE_FRAME_ID.into(),
+            transform_version: 1,
+            payload: ObservationPayload::Detection {
+                class,
+                position_m: [0.0, 0.0, 0.0],
+                sigma_m: 1.5,
+                confidence_bp: 8_000,
+            },
+        }
+    }
+
+    #[test]
+    fn ingest_counts_duplicates_rejections_and_reducer_refusals() {
+        let mut s = LocalSession::new(1).unwrap();
+        let first = envelope(1, 0, EntityClass::Vehicle);
+        assert!(s.ingest(&first).unwrap().entities.len() == 1);
+        assert_eq!(s.stats().accepted, 1);
+        assert!(s.ingest(&first).unwrap().is_empty());
+        assert_eq!(s.stats().duplicates, 1);
+
+        let mut bad = envelope(2, 0, EntityClass::Vehicle);
+        bad.frame_id = "nowhere".into();
+        assert!(s.ingest(&bad).unwrap().is_empty());
+        assert_eq!(s.stats().rejected, 1);
+
+        // Acquired after the scene clock: the tracker would start a track,
+        // and the reducer refuses it. State does not change.
+        let future = envelope(3, 5, EntityClass::Person);
+        assert!(s.ingest(&future).unwrap().is_empty());
+        assert_eq!(s.stats().rejected, 2);
+        assert_eq!(s.authority().store().entity_record_count(), 1);
+    }
+
+    #[test]
+    fn stopped_advance_is_an_error() {
+        let stopped = Advanced {
+            changes: Changes::default(),
+            stopped: Some(CommandError::JournalFull { limit: 1 }),
+        };
+        assert!(matches!(
+            stopped.ok(),
+            Err(CommandError::JournalFull { limit: 1 })
+        ));
+        let done = Advanced {
+            changes: Changes::default(),
+            stopped: None,
+        };
+        assert!(done.ok().unwrap().is_empty());
+    }
+}

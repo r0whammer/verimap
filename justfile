@@ -35,6 +35,12 @@ test: web-install
     cargo test --workspace --all-features
     cd web && pnpm run test
 
+# Line coverage of production Rust, and line/branch coverage of the pure web
+# modules. Fails if a production line is uncovered and not listed in
+# scripts/coverage-allowlist.txt, or if web coverage drops below 100%.
+coverage: web-install
+    scripts/coverage.sh
+
 # Install web dependencies exactly as locked (pnpm-lock.yaml)
 web-install:
     cd web && pnpm install --frozen-lockfile --prefer-offline --reporter=silent
@@ -92,16 +98,19 @@ proofs-cache: _proofs-ready
     cd proofs && lake exe cache get
 
 # Lake build, then fail on unimported proof modules, placeholders, or
-# theorems that depend on axioms beyond propext/Classical.choice/Quot.sound
+# theorems that depend on axioms beyond propext/Classical.choice/Quot.sound.
+# Also fails if a public kernel function is absent from docs/verification.md.
 audit: proofs
     scripts/audit.sh
+    scripts/proof-inventory.sh
+    scripts/check-badges.sh proofs lean
 
 # Fail if committed generated output is stale, modified, missing, or untracked
 check-generated: _nix
     scripts/check-generated.sh
 
 # All available required checks
-verify: toolchain-check fmt-check lint test check-generated audit e2e
+verify: toolchain-check fmt-check lint test coverage check-generated audit e2e
 
 # Remove build output (keeps committed generated files and node_modules)
 clean:
