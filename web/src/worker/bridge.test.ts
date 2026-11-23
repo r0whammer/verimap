@@ -93,6 +93,10 @@ describe('CoreBridge', () => {
     vi.useRealTimers();
   });
 
+  it('constructs a real worker when none is injected', () => {
+    expect(() => new CoreBridge()).toThrow();
+  });
+
   it('opens with hello carrying the generated protocol version', () => {
     const { worker, bridge } = start();
     expect(worker.sent).toEqual([
@@ -204,5 +208,38 @@ describe('CoreBridge', () => {
     expect(worker.terminated).toBe(true);
     vi.advanceTimersByTime(HANDSHAKE_TIMEOUT_MS);
     expect(seen).toEqual([]);
+  });
+
+  it('dispose fails a request that is still pending', async () => {
+    const { worker, bridge } = start();
+    worker.reply(ready);
+    const pending = bridge.request({ type: 'advance', ticks: 1 });
+    bridge.dispose();
+    expect(await pending).toMatchObject({
+      type: 'error',
+      code: 'internal',
+      message: 'core stopped',
+    });
+  });
+
+  it('unsubscribes, rejects a hello answered with the wrong event, and a late ready', () => {
+    const { worker, bridge } = start();
+    const seen: CoreStatus[] = [];
+    const stop = bridge.subscribe((status) => {
+      seen.push(status);
+    });
+    stop();
+    worker.reply({ type: 'scene', update: emptyScene });
+    expect(bridge.status.state).toBe('failed');
+    expect(seen).toEqual([]);
+    if (bridge.status.state === 'failed') {
+      expect(bridge.status.reason).toContain('scene');
+    }
+
+    const again = start();
+    again.worker.reply(ready);
+    again.worker.reply(ready);
+    expect(again.bridge.status.state).toBe('failed');
+    again.worker.onerror?.({ message: '' } as ErrorEvent);
   });
 });

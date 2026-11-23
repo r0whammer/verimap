@@ -97,3 +97,41 @@ impl fmt::Display for DomainError {
 }
 
 impl std::error::Error for DomainError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_variant_names_its_field_and_explains_itself() {
+        let samples = [
+            DomainError::ConfidenceOutOfRange {
+                field: "confidence",
+            },
+            DomainError::CoordinateOutOfRange {
+                field: "position.x",
+            },
+            DomainError::BoundsInverted { field: "bounds.x" },
+            DomainError::EmptyExtent { field: "bounds.z" },
+            DomainError::NonFinite { field: "latitude" },
+            DomainError::OutOfRange { field: "sigma" },
+            DomainError::OutsideSite { field: "position" },
+            DomainError::InvalidText {
+                field: "label",
+                reason: "must not be empty",
+            },
+            DomainError::from_kernel("seq", KernelError::SequenceExhausted),
+            DomainError::from_kernel("confidence", KernelError::ConfidenceOutOfRange),
+            DomainError::from_kernel("position.x", KernelError::CoordinateOutOfRange),
+            DomainError::from_kernel("bounds.y", KernelError::BoundsInverted),
+        ];
+        for e in samples {
+            assert!(!e.field().is_empty());
+            assert!(e.to_string().contains(e.field()), "{}", e);
+        }
+        assert_eq!(
+            DomainError::from_kernel("seq", KernelError::SequenceExhausted),
+            DomainError::OutOfRange { field: "seq" }
+        );
+    }
+}

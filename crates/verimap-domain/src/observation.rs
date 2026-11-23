@@ -221,10 +221,15 @@ impl Normalizer {
             confidence: Confidence::new(confidence_bp)?,
         };
         state.recent.insert(env.sequence);
-        if let Some(h) = state.recent.last().copied() {
-            let floor = h.saturating_sub(Self::DEDUP_WINDOW);
-            state.recent = state.recent.split_off(&floor);
-        }
+        // The insert above leaves the set non-empty.
+        #[allow(clippy::expect_used)]
+        let h = state
+            .recent
+            .last()
+            .copied()
+            .expect("the sequence was just inserted");
+        let floor = h.saturating_sub(Self::DEDUP_WINDOW);
+        state.recent = state.recent.split_off(&floor);
         Ok(Detection {
             source: ObservationRef {
                 source: id,
@@ -374,5 +379,26 @@ mod tests {
             Err(ObservationError::OutsideWindow)
         );
         assert!(n.normalize(&envelope(10)).is_ok());
+    }
+
+    #[test]
+    fn errors_explain_themselves() {
+        let samples = [
+            ObservationError::Invalid(DomainError::NonFinite {
+                field: "position.x",
+            }),
+            ObservationError::from(DomainError::OutsideSite { field: "position" }),
+            ObservationError::UnknownSource,
+            ObservationError::SessionMismatch,
+            ObservationError::ClockDomainMismatch,
+            ObservationError::UnknownFrame,
+            ObservationError::TransformVersionMismatch,
+            ObservationError::ReceivedBeforeAcquired,
+            ObservationError::Duplicate,
+            ObservationError::OutsideWindow,
+        ];
+        for e in samples {
+            assert!(!e.to_string().is_empty(), "{e:?}");
+        }
     }
 }

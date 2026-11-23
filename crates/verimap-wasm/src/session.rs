@@ -649,4 +649,85 @@ mod tests {
             ErrorCode::NotFound
         );
     }
+
+    #[test]
+    fn removing_a_track_updates_the_view_and_blocks_inspection() {
+        let mut s = ready();
+        update(send(&mut s, r#"{"type":"advance","ticks":20}"#));
+        let CoreEvent::EntityDetail { detail } =
+            send(&mut s, r#"{"type":"inspect_entity","id":"trk:1"}"#)
+        else {
+            panic!("expected detail");
+        };
+        let rev = detail.entity.revision.0;
+        let del = format!(r#"{{"type":"remove_entity","id":"trk:1","base_revision":"{rev}"}}"#);
+        let u = update(send(&mut s, &del));
+        assert_eq!(u.removed_entities, ["trk:1"]);
+        assert_eq!(error_code(send(&mut s, &del)), ErrorCode::Deleted);
+        assert_eq!(
+            error_code(send(&mut s, r#"{"type":"inspect_entity","id":"trk:1"}"#)),
+            ErrorCode::Deleted
+        );
+        assert_eq!(
+            error_code(send(
+                &mut s,
+                r#"{"type":"delete_annotation","id":"op:9","base_revision":"1"}"#
+            )),
+            ErrorCode::NotFound
+        );
+        // A replacing view includes annotations that were placed first.
+        update(send(
+            &mut s,
+            r#"{"type":"add_marker","label":"Gate","at":{"position":{"x_m":1,"y_m":2,"z_m":0},"placement":"ground_plane"}}"#,
+        ));
+        let u = update(send(&mut s, r#"{"type":"review","tick":"0"}"#));
+        assert!(u.replace);
+        assert!(u.annotations.is_empty());
+        let u = update(send(&mut s, r#"{"type":"go_live"}"#));
+        assert_eq!(u.annotations.len(), 1);
+    }
+
+    #[test]
+    fn error_mapping_covers_every_command_failure() {
+        use verimap_domain::{ApplyError, CommandError, ObjectId};
+        let id = ObjectId::parse("id", "op:1").unwrap();
+        let samples = [
+            CommandError::Invalid(verimap_domain::DomainError::NonFinite { field: "z" }),
+            CommandError::NotFound { id: id.clone() },
+            CommandError::Deleted { id: id.clone() },
+            CommandError::PreconditionFailed {
+                id: id.clone(),
+                base_revision: 1,
+                current: 2,
+            },
+            CommandError::NothingToChange,
+            CommandError::JournalFull { limit: 4 },
+            CommandError::SequenceExhausted,
+            CommandError::IdSpaceExhausted,
+            CommandError::Rejected(ApplyError::ProvenanceMismatch),
+        ];
+        for e in samples {
+            let mapped = command_error(e.clone());
+            assert_eq!(mapped.code, command_code(&e));
+            assert!(!mapped.message.is_empty());
+            let problem = problem(&e);
+            assert_eq!(problem.code, mapped.code);
+        }
+        let replayed = replay_error(ApplyError::SequenceExhausted);
+        assert_eq!(replayed.code, ErrorCode::Internal);
+        assert!(replayed.message.contains("replay"));
+
+        let mut live = LocalSession::new(1).unwrap();
+        let mut review = None;
+        let unexpected = handle_negotiated(
+            &mut live,
+            &mut review,
+            UiRequest::Hello {
+                protocol: PROTOCOL_VERSION,
+                ui_build: "test".into(),
+            },
+        )
+        .unwrap_err();
+        assert_eq!(unexpected.code, ErrorCode::Internal);
+    }
 }

@@ -62,6 +62,7 @@ impl JsonSchema for U64String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use schemars::JsonSchema;
 
     #[test]
     fn round_trips_the_full_range() {
@@ -94,5 +95,14 @@ mod tests {
                 "{bad} accepted"
             );
         }
+    }
+
+    #[test]
+    fn schema_is_a_canonical_decimal_string() {
+        assert_eq!(U64String::schema_name(), "U64String");
+        let schema = U64String::json_schema(&mut schemars::SchemaGenerator::default());
+        let json = serde_json::to_value(schema).unwrap();
+        assert_eq!(json["type"], "string");
+        assert_eq!(json["pattern"], "^(0|[1-9][0-9]{0,19})$");
     }
 }

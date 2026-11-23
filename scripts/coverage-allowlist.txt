@@ -1,0 +1,12 @@
+# Production Rust lines that instrumentation cannot reach, one `path:line`
+# followed by a reason. `scripts/coverage-gate.py` fails when an uncovered
+# line is missing here, and when an entry here is covered.
+
+# `LocalSession::new` only fails if the bundled site stops validating. The
+# success path is what every session test runs.
+crates/verimap-wasm/src/session.rs:90 bundled demo site cannot fail in this build
+crates/verimap-wasm/src/session.rs:91 bundled demo site cannot fail in this build
+crates/verimap-wasm/src/session.rs:92 bundled demo site cannot fail in this build
+crates/verimap-wasm/src/session.rs:93 bundled demo site cannot fail in this build
+crates/verimap-wasm/src/session.rs:96 closing the branch taken only when session construction fails
+crates/verimap-wasm/src/session.rs:98 live session is assigned on the line above

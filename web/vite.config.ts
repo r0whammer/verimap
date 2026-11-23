@@ -55,5 +55,23 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
     environment: 'node',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'text-summary'],
+      // Presentation components are exercised by the Playwright suite.
+      // These modules are the UI logic that unit tests can run without a map.
+      include: [
+        'src/format.ts',
+        'src/scene/model.ts',
+        'src/worker/bridge.ts',
+        'src/components/labels.ts',
+      ],
+      thresholds: {
+        lines: 100,
+        branches: 100,
+        functions: 100,
+        statements: 100,
+      },
+    },
   },
 });

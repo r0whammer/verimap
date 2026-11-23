@@ -45,3 +45,21 @@ impl Default for Core {
 pub fn core_build() -> String {
     CORE_BUILD.to_owned()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use verimap_protocol::PROTOCOL_VERSION;
+
+    #[test]
+    fn the_wasm_entry_forwards_json_to_the_session() {
+        assert_eq!(core_build(), CORE_BUILD);
+        let mut core = Core::default();
+        let hello = format!(
+            r#"{{"type":"hello","protocol":{{"major":{},"minor":{}}},"ui_build":"test"}}"#,
+            PROTOCOL_VERSION.major, PROTOCOL_VERSION.minor
+        );
+        let out = core.handle(&hello);
+        assert!(out.contains("\"type\":\"ready\""), "{out}");
+    }
+}

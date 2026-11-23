@@ -131,6 +131,33 @@ off the local server.
 - The M0 limitations above still apply: no real devices, no offline cache,
   and no performance measurements.
 
+## Test and proof coverage
+
+Measured on 2026-11-04 before the coverage gate, with
+`cargo llvm-cov` / `llvm-cov` on `nightly-2026-09-17` (source-based
+instrumentation). This compiler reports conditional coverage as regions
+and leaves the branch column at zero.
+
+| | Lines | Regions |
+| --- | --- | --- |
+| All instrumented Rust, including test helpers | 92.88% (179 lines missed) | 90.60% |
+| `verimap-kernel` | 100% | 100% |
+
+The misses were display text, a few refusal paths, and the schema/WASM
+entry points. After the added tests, production Rust (library and bin
+sources, not `#[cfg(test)]` modules or `tests/`) is **1789/1795 lines
+(99.67%)**. The six remaining lines are the bundled-site failure returns
+in the session handshake; they are listed with reasons in
+`scripts/coverage-allowlist.txt`, and `just coverage` fails if any other
+production line is uncovered or if an allowlisted line becomes covered.
+The pure web modules (`format`, scene `model`, worker `bridge`, freshness
+labels) are at **100% line and branch** coverage (V8). React and Cesium
+components stay with the Playwright suite. `just audit` also checks that
+every public kernel function is named in
+[verification.md](verification.md): 11 functions, 10 distinct names, all
+named. The kernel source did not change, so the previously checked proofs
+still apply.
+
 ## Not started
 
 M2 map changes, M3 resilient demo, M4 gateway, M5 real data. Unavailable

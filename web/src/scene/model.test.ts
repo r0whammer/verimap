@@ -60,6 +60,8 @@ describe('applyUpdate', () => {
     );
     expect([...s.entities.keys()]).toEqual(['trk:2']);
     expect(s.annotations.get('op:1')?.label).toBe('Gate');
+    s = applyUpdate(s, update({ removed_annotations: ['op:1'] }));
+    expect(s.annotations.size).toBe(0);
   });
 
   it('replace discards everything not in the update', () => {
@@ -86,5 +88,14 @@ describe('applyUpdate', () => {
       replacingUpdate(a),
     );
     expect(b).toEqual(a);
+    expect(replacingUpdate(a).problem).toBeNull();
+  });
+
+  it('keeps a problem from the update and clears it when the next one omits it', () => {
+    const problem = { code: 'journal_full' as const, message: 'full' };
+    const s = applyUpdate(null, update({ problem }));
+    expect(s.problem).toEqual(problem);
+    const next = applyUpdate(s, update({}));
+    expect(next.problem).toBeNull();
   });
 });
